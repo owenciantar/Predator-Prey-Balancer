@@ -3,1271 +3,1201 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Predator-Prey Balancer</title>
+<title>Carrot Defense</title>
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-
-body {
-  background: #0a160a;
-  color: #90b890;
-  font-family: 'Courier New', monospace;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-height: 100vh;
-  padding: 14px 16px;
-  user-select: none;
-}
-
-h1 {
-  color: #55cc55;
-  font-size: 1.2rem;
-  letter-spacing: 4px;
-  text-transform: uppercase;
-  margin-bottom: 12px;
-  text-shadow: 0 0 12px #33aa3388;
-}
-
-#game-wrap {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-}
-
-#canvas-wrap {
-  position: relative;
-  flex-shrink: 0;
-}
-
-canvas {
-  display: block;
-  border: 1px solid #1e3a1e;
-  cursor: crosshair;
-  image-rendering: pixelated;
-}
-
-/* ---- Overlay ---- */
-#overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(5, 12, 5, 0.88);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-}
-
-#overlay h2 {
-  font-size: 1.8rem;
-  letter-spacing: 6px;
-  color: #55cc55;
-  text-shadow: 0 0 20px #33aa3388;
-}
-
-#overlay-msg {
-  color: #80a880;
-  font-size: 0.82rem;
-  text-align: center;
-  line-height: 1.7;
-  max-width: 340px;
-}
-
-#overlay-btn {
-  margin-top: 6px;
-  background: transparent;
-  color: #55cc55;
-  border: 1px solid #33aa33;
-  padding: 8px 28px;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 0.9rem;
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  transition: background 0.15s;
-}
-#overlay-btn:hover { background: #1a3a1a; }
-
-/* ---- Sidebar ---- */
-#sidebar {
-  width: 190px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
-.panel {
-  background: #0d1f0d;
-  border: 1px solid #1a3a1a;
-  padding: 10px 12px;
-}
-
-.panel-title {
-  color: #55cc55;
-  font-size: 0.68rem;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  margin-bottom: 10px;
-  border-bottom: 1px solid #1a3a1a;
-  padding-bottom: 5px;
-}
-
-/* ---- Population bars ---- */
-.pop-row { margin-bottom: 9px; }
-.pop-row:last-child { margin-bottom: 0; }
-
-.pop-label {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.72rem;
-  margin-bottom: 4px;
-  color: #90b890;
-}
-
-.pop-label .icon { font-size: 0.85rem; }
-.pop-label .count { color: #aaccaa; font-weight: bold; min-width: 28px; text-align: right; }
-
-.pop-track {
-  height: 7px;
-  background: #0f1f0f;
-  border: 1px solid #1a3a1a;
-  position: relative;
-  overflow: visible;
-}
-
-.pop-bar {
-  height: 100%;
-  transition: width 0.25s ease, background-color 0.4s ease;
-  min-width: 2px;
-}
-
-.pop-min-marker {
-  position: absolute;
-  top: -3px;
-  bottom: -3px;
-  width: 1px;
-  background: #ff444466;
-}
-
-/* ---- Tool buttons ---- */
-.tool-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 9px;
-  background: transparent;
-  border: 1px solid #1a3a1a;
-  color: #80a880;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 0.75rem;
-  width: 100%;
-  text-align: left;
-  margin-bottom: 5px;
-  transition: border-color 0.1s, background 0.1s, color 0.1s;
-}
-.tool-btn:last-child { margin-bottom: 0; }
-
-.tool-btn:hover:not(.active) {
-  background: #111f11;
-  border-color: #2a5a2a;
-  color: #aaccaa;
-}
-
-.tool-btn.active {
-  border-color: #55cc55;
-  background: #112211;
-  color: #88ee88;
-}
-
-.swatch {
-  width: 12px;
-  height: 12px;
-  flex-shrink: 0;
-  border-radius: 1px;
-}
-
-.tool-cost { margin-left: auto; color: #55aa55; font-size: 0.68rem; }
-.tool-range { font-size: 0.62rem; color: #6868aa; margin-left: 4px; }
-
-/* ---- Spirit energy ---- */
-.energy-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-bottom: 6px;
-}
-
-.orb {
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  background: #1a2a1a;
-  border: 1px solid #2a4a2a;
-  transition: background 0.2s, box-shadow 0.2s;
-}
-
-.orb.lit {
-  background: #44cc44;
-  border-color: #55dd55;
-  box-shadow: 0 0 5px #33bb3388;
-}
-
-.energy-sub { font-size: 0.65rem; color: #50705050; }
-
-/* ---- Timer / status ---- */
-#timer {
-  font-size: 1.5rem;
-  color: #55cc55;
-  text-align: center;
-  letter-spacing: 2px;
-  text-shadow: 0 0 10px #33aa3344;
-}
-
-#win-bar-bg {
-  height: 4px;
-  background: #0f1f0f;
-  border: 1px solid #1a3a1a;
-  margin-top: 6px;
-  overflow: hidden;
-}
-#win-bar { height: 100%; width: 0%; background: #55cc55; transition: width 0.5s linear; }
-
-#status-text {
-  font-size: 0.7rem;
-  color: #80a880;
-  text-align: center;
-  min-height: 36px;
-  line-height: 1.6;
-  margin-top: 6px;
-}
-
-.warn  { color: #ffaa00; }
-.alert { color: #ff5555; }
-
-/* ---- Help text ---- */
-#help {
-  font-size: 0.65rem;
-  color: #3a5a3a;
-  line-height: 1.65;
-}
-#help b { color: #608060; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a160a;
+    color: #ccddcc;
+    font-family: monospace;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+  }
+  #top-bar {
+    height: 48px;
+    min-height: 48px;
+    background: #071207;
+    border-bottom: 2px solid #1a3a1a;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 18px;
+    flex-shrink: 0;
+  }
+  #top-bar .stat {
+    font-size: 14px;
+    font-weight: bold;
+    white-space: nowrap;
+  }
+  #lives-disp { color: #88ee88; }
+  #lives-disp.danger { color: #ff4444; }
+  #money-disp { color: #ffdd44; }
+  #money-disp.low { color: #ff6644; }
+  #wave-display { color: #aaccff; }
+  #start-btn {
+    background: #1a5a1a;
+    color: #aaffaa;
+    border: 1px solid #44aa44;
+    padding: 5px 12px;
+    font-family: monospace;
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  #start-btn:hover:not(:disabled) { background: #226622; }
+  #start-btn:disabled { opacity: 0.5; cursor: default; }
+  #status-msg {
+    font-size: 12px;
+    color: #88cc88;
+    flex: 1;
+    text-align: right;
+  }
+  #main-area {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+  #canvas-wrap {
+    position: relative;
+    flex-shrink: 0;
+  }
+  #grid {
+    display: block;
+    cursor: crosshair;
+  }
+  #overlay {
+    display: none;
+    position: absolute;
+    top: 0; left: 0;
+    width: 720px; height: 480px;
+    background: rgba(0,0,0,0.75);
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    gap: 14px;
+    z-index: 10;
+  }
+  #overlay.show { display: flex; }
+  #overlay h1 { font-size: 40px; font-family: monospace; }
+  #overlay h1.win { color: #44ff44; }
+  #overlay h1.lose { color: #ff4444; }
+  #overlay p { color: #ccddcc; font-family: monospace; font-size: 15px; }
+  #overlay button {
+    background: #1a5a1a;
+    color: #aaffaa;
+    border: 1px solid #44aa44;
+    padding: 8px 22px;
+    font-family: monospace;
+    font-size: 15px;
+    cursor: pointer;
+    border-radius: 4px;
+    margin-top: 6px;
+  }
+  #overlay button:hover { background: #226622; }
+  #tower-panel {
+    width: 200px;
+    min-width: 200px;
+    background: #071207;
+    border-left: 2px solid #1a3a1a;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 8px;
+    gap: 6px;
+  }
+  .panel-title {
+    font-size: 13px;
+    font-weight: bold;
+    color: #aaffaa;
+    text-align: center;
+    border-bottom: 1px solid #1a3a1a;
+    padding-bottom: 5px;
+    margin-bottom: 2px;
+    letter-spacing: 2px;
+  }
+  #tower-cards { display: flex; flex-direction: column; gap: 5px; }
+  .tower-card {
+    background: #0d220d;
+    border: 1px solid #224422;
+    border-radius: 4px;
+    padding: 5px 6px;
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .tower-card:hover { background: #122a12; border-color: #33aa33; }
+  .tower-card.selected { background: #1a3a1a; border-color: #66dd66; }
+  .tower-card.disabled { opacity: 0.45; cursor: default; }
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .card-icon { border-radius: 2px; flex-shrink: 0; }
+  .card-name { font-size: 12px; font-weight: bold; color: #ccffcc; flex: 1; }
+  .card-cost { font-size: 12px; color: #ffdd44; }
+  .card-desc { font-size: 10px; color: #88aa88; margin-top: 2px; }
+  #sel-tower-info {
+    background: #0d220d;
+    border: 1px solid #335533;
+    border-radius: 4px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+  }
+  #sel-tower-info .tw-title { font-weight: bold; color: #ccffcc; font-size: 13px; }
+  #sel-tower-info .tw-stats { color: #99bb99; }
+  #sel-tower-info hr { border-color: #224422; margin: 2px 0; }
+  #sel-tower-info button {
+    background: #122a12;
+    color: #aaffaa;
+    border: 1px solid #224422;
+    padding: 5px 6px;
+    font-family: monospace;
+    font-size: 11px;
+    cursor: pointer;
+    border-radius: 3px;
+    text-align: left;
+    line-height: 1.4;
+  }
+  #sel-tower-info button:hover:not(:disabled) { background: #1a3a1a; border-color: #44aa44; }
+  #sel-tower-info button:disabled { opacity: 0.4; cursor: default; }
+  #btn-sell { color: #ffaaaa; border-color: #553322; }
+  #btn-sell:hover:not(:disabled) { background: #2a1a1a !important; border-color: #aa4422 !important; }
+  #btn-desel { color: #aaaacc; }
+  .hotkey-hint {
+    font-size: 10px;
+    color: #556655;
+    text-align: center;
+    margin-top: 4px;
+  }
 </style>
 </head>
 <body>
-
-<h1>&#x1F33F; Predator-Prey Balancer</h1>
-
-<div id="game-wrap">
+<div id="top-bar">
+  <span class="stat" id="lives-disp">❤️ Lives: 20</span>
+  <span class="stat" id="money-disp">💰 $150</span>
+  <span class="stat" id="wave-display">Wave 0/20</span>
+  <button id="start-btn">START WAVE 1</button>
+  <span id="status-msg"></span>
+</div>
+<div id="main-area">
   <div id="canvas-wrap">
-    <canvas id="grid"></canvas>
+    <canvas id="grid" width="720" height="480"></canvas>
     <div id="overlay">
-      <h2 id="ov-title">NATURE SPIRIT</h2>
-      <p id="overlay-msg">
-        You are the spirit of the wild.<br>
-        <b>Wolves</b> (towers) defend against <b>rabbit</b> waves.<br>
-        <b>Plants</b> feed rabbits — keep them in balance.<br><br>
-        Survive <b>3 minutes</b> without any species dying out<br>
-        or overrunning the land.
-      </p>
-      <button id="overlay-btn">BEGIN</button>
+      <h1 id="overlay-title"></h1>
+      <p id="overlay-msg"></p>
+      <p id="overlay-sub"></p>
+      <button id="replay-btn">PLAY AGAIN</button>
     </div>
   </div>
-
-  <div id="sidebar">
-
-    <!-- Populations -->
-    <div class="panel">
-      <div class="panel-title">Populations</div>
-
-      <div class="pop-row">
-        <div class="pop-label">
-          <span><span class="icon">&#x1F331;</span> Plants</span>
-          <span class="count" id="cnt-plant">0</span>
-        </div>
-        <div class="pop-track" id="track-plant">
-          <div class="pop-bar" id="bar-plant"></div>
-          <div class="pop-min-marker" id="min-plant"></div>
-        </div>
-      </div>
-
-      <div class="pop-row">
-        <div class="pop-label">
-          <span><span class="icon">&#x1F407;</span> Rabbits</span>
-          <span class="count" id="cnt-rabbit">0</span>
-        </div>
-        <div class="pop-track" id="track-rabbit">
-          <div class="pop-bar" id="bar-rabbit"></div>
-          <div class="pop-min-marker" id="min-rabbit"></div>
-        </div>
-      </div>
-
-      <div class="pop-row">
-        <div class="pop-label">
-          <span><span class="icon">&#x1F43A;</span> Wolves</span>
-          <span class="count" id="cnt-wolf">0</span>
-        </div>
-        <div class="pop-track" id="track-wolf">
-          <div class="pop-bar" id="bar-wolf"></div>
-          <div class="pop-min-marker" id="min-wolf"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tools -->
-    <div class="panel">
-      <div class="panel-title">Summon</div>
-      <button class="tool-btn active" id="btn-plant" onclick="setTool('plant')">
-        <div class="swatch" style="background:#3a9a3a"></div>
-        [1] Plant
-        <span class="tool-cost">1&#x2736;</span>
-      </button>
-      <button class="tool-btn" id="btn-rabbit" onclick="setTool('rabbit')">
-        <div class="swatch" style="background:#c09040"></div>
-        [2] Rabbit
-        <span class="tool-cost">2&#x2736;</span>
-      </button>
-      <button class="tool-btn" id="btn-wolf" onclick="setTool('wolf')">
-        <div class="swatch" style="background:#6a6aaa"></div>
-        [3] Wolf
-        <span class="tool-cost">3&#x2736;</span>
-        <span class="tool-range">Range:&nbsp;2</span>
-      </button>
-    </div>
-
-    <!-- Spirit energy -->
-    <div class="panel">
-      <div class="panel-title">Spirit Energy</div>
-      <div class="energy-row" id="energy-orbs"></div>
-      <div class="energy-sub">+1 every 4 seconds &bull; max 12</div>
-    </div>
-
-    <!-- Timer -->
-    <div class="panel">
-      <div id="timer">3:00</div>
-      <div id="win-bar-bg"><div id="win-bar"></div></div>
-      <div id="wave-info" style="font-size:0.7rem; color:#60a060; text-align:center; margin-top:4px">
-        Wave <span id="wave-num">0</span> &bull; Next in <span id="wave-next">&#x2014;</span>
-      </div>
-      <div id="status-text"></div>
-    </div>
-
-    <!-- Help -->
-    <div class="panel" id="help">
-      <b>Drag</b> to paint plants<br>
-      <b>Click</b> to place animals<br>
-      <b>Right-click</b> to remove<br>
-      <b>Keys:</b> 1 / 2 / 3 to switch tool<br>
-      <b>Range shown on hover</b><br><br>
-      <b>Lose if:</b> any species hits 0<br>or exceeds its max limit
-    </div>
-
+  <div id="tower-panel">
+    <div class="panel-title">TOWERS</div>
+    <div id="tower-cards"></div>
+    <div id="sel-tower-info" style="display:none"></div>
+    <div class="hotkey-hint">Keys 1-5 to select</div>
   </div>
 </div>
-
 <script>
-// ─────────────────────────────────────────────
-//  CONSTANTS
-// ─────────────────────────────────────────────
-const COLS = 40, ROWS = 30, CELL = 20;
-const W = COLS * CELL, H = ROWS * CELL;        // 800 × 600
-const TICK_MS   = 200;                          // 5 ticks/sec
-const WIN_MS    = 180_000;                      // 3 minutes
-const REGEN_MS  = 4_000;                        // spirit energy recharge
-const MAX_ENERGY = 12;
+'use strict';
 
-const T = { EMPTY: 0, PLANT: 1, RABBIT: 2, WOLF: 3 };
+const CELL = 20;
+const COLS = 36;
+const ROWS = 24;
+const W = COLS * CELL;
+const H = ROWS * CELL;
+const TICK_MS = 80;
+const PI = Math.PI;
 
-// Population limits
-const MIN = { [T.PLANT]: 6, [T.RABBIT]: 3, [T.WOLF]: 2 };
-const MAX_POP = { [T.PLANT]: 480, [T.RABBIT]: 230, [T.WOLF]: 85 };
-
-// Rabbit parameters
-const R_INIT    = 26;
-const R_MAX_E   = 42;
-const R_GAIN    = 11;
-const R_REPR    = 35;
-const R_REPR_P  = 0.25;
-const R_MAXAGE  = 480;
-const R_VISION  = 5;
-
-// Wolf parameters
-const W_INIT    = 32;
-const W_MAX_E   = 62;
-const W_GAIN    = 22;
-const W_REPR    = 52;
-const W_REPR_P  = 0.22;
-const W_MAXAGE  = 700;
-const WOLF_RANGE = 2;
-const W_DRIFT_RANGE = 4;
-
-// Plant parameters
-const PLANT_SPREAD = 0.04;
-
-// Wave parameters
-const WAVE_INTERVAL_TICKS = 150; // every 30 ticks = 30 * 200ms = 6 seconds... spec says 30 ticks
-
-const COST = { plant: 1, rabbit: 2, wolf: 3 };
-
-// ─────────────────────────────────────────────
-//  CANVAS SETUP
-// ─────────────────────────────────────────────
 const canvas = document.getElementById('grid');
-const ctx    = canvas.getContext('2d');
-canvas.width  = W;
-canvas.height = H;
-
-const buf  = document.createElement('canvas');
+const ctx = canvas.getContext('2d');
+const buf = document.createElement('canvas');
 buf.width = W; buf.height = H;
 const bctx = buf.getContext('2d');
 
-// ─────────────────────────────────────────────
-//  STATE
-// ─────────────────────────────────────────────
-let grid      = [];
-let terrain   = [];
-let pops      = {};
-let spirit    = MAX_ENERGY;
-let selTool   = 'plant';
-let gameState = 'idle';
-let t0 = 0, lastTick = 0, lastRegen = 0;
-let hoverCell = null;
+// ── PATH ──────────────────────────────────────────────────────────────────────
+
+const WAYPOINTS = [
+  [0,4],[8,4],[8,12],[2,12],[2,20],[14,20],[14,14],[24,14],[24,6],[30,6],[30,20],[35,20],[35,4]
+];
+
+function buildSegments() {
+  const segs = [];
+  let total = 0;
+  for (let i = 0; i < WAYPOINTS.length - 1; i++) {
+    const [c0, r0] = WAYPOINTS[i];
+    const [c1, r1] = WAYPOINTS[i + 1];
+    const len = Math.abs(c1 - c0) + Math.abs(r1 - r0);
+    segs.push({ c0, r0, c1, r1, len, start: total });
+    total += len;
+  }
+  return { segs, total };
+}
+
+const { segs: SEGMENTS, total: PATH_LEN } = buildSegments();
+
+function getPathPos(dist) {
+  dist = Math.max(0, Math.min(PATH_LEN, dist));
+  for (let i = 0; i < SEGMENTS.length; i++) {
+    const seg = SEGMENTS[i];
+    if (dist <= seg.start + seg.len || i === SEGMENTS.length - 1) {
+      const t = seg.len > 0 ? (dist - seg.start) / seg.len : 0;
+      const col = seg.c0 + (seg.c1 - seg.c0) * t;
+      const row = seg.r0 + (seg.r1 - seg.r0) * t;
+      return { x: (col + 0.5) * CELL, y: (row + 0.5) * CELL };
+    }
+  }
+  const last = WAYPOINTS[WAYPOINTS.length - 1];
+  return { x: (last[0] + 0.5) * CELL, y: (last[1] + 0.5) * CELL };
+}
+
+// PATH_CELLS: Set of r*COLS+c integers for every cell on the path
+const PATH_CELLS = new Set();
+for (const seg of SEGMENTS) {
+  const dc = Math.sign(seg.c1 - seg.c0);
+  const dr = Math.sign(seg.r1 - seg.r0);
+  let c = seg.c0, r = seg.r0;
+  while (true) {
+    PATH_CELLS.add(r * COLS + c);
+    if (c === seg.c1 && r === seg.r1) break;
+    c += dc;
+    r += dr;
+  }
+}
+
+// ── TOWER DEFINITIONS ─────────────────────────────────────────────────────────
+
+const TOWER_DEFS = {
+  wolf:  { name:'Wolf',  cost:75,  range:2.5, damage:1,   cooldown:12, attackType:'single', color:'#6666aa', projColor:'#aaaaff', key:'1', desc:'Fast attack. Single target.' },
+  bear:  { name:'Bear',  cost:150, range:2.2, damage:0.8, cooldown:20, attackType:'aoe',    color:'#886633', projColor:'#ffcc66', key:'2', desc:'AoE burst. Hits all in range.' },
+  eagle: { name:'Eagle', cost:200, range:5.5, damage:3,   cooldown:28, attackType:'pierce', color:'#ccaa22', projColor:'#ffee44', key:'3', desc:'Sniper. Pierces 3 targets.' },
+  skunk: { name:'Skunk', cost:100, range:2.5, damage:0,   cooldown:25, attackType:'slow',   color:'#666666', projColor:'#aaddff', key:'4', desc:'Slows 50% for 3 seconds.' },
+  fox:   { name:'Fox',   cost:125, range:3,   damage:1.5, cooldown:32, attackType:'multi',  color:'#cc5511', projColor:'#ffaa44', key:'5', desc:'Hits 3 targets at once.' },
+};
+
+const UPGRADES = {
+  wolf:  { name:'Razor Fangs',  cost:55,  desc:'2x damage' },
+  bear:  { name:'Wide Slam',    cost:100, desc:'+50% range' },
+  eagle: { name:'Eagle Eyes',   cost:140, desc:'Pierce 5 targets' },
+  skunk: { name:'Potent Cloud', cost:70,  desc:'2x slow duration' },
+  fox:   { name:'Pack Tactics', cost:95,  desc:'Hits 5 targets' },
+};
+
+// ── RABBIT DEFINITIONS ────────────────────────────────────────────────────────
+
+const RABBIT_DEFS = {
+  normal:  { hp:2,  speed:0.10, reward:5,  lives:1, size:1.0, color:'#c8a040', earColor:'#d8b060', label:'Rabbit'  },
+  fast:    { hp:1,  speed:0.22, reward:5,  lives:1, size:0.8, color:'#ff9922', earColor:'#ffcc44', label:'Speedy'  },
+  tough:   { hp:10, speed:0.07, reward:15, lives:2, size:1.2, color:'#886633', earColor:'#aa8844', label:'Tough'   },
+  armored: { hp:20, speed:0.06, reward:25, lives:3, size:1.3, color:'#778866', earColor:'#99aa77', label:'Armored' },
+  boss:    { hp:60, speed:0.04, reward:60, lives:5, size:1.8, color:'#cc2222', earColor:'#ee4444', label:'BOSS'    },
+};
+
+// ── WAVE DEFINITIONS ──────────────────────────────────────────────────────────
+
+const WAVE_DEFS = [
+  {groups:[[10,'normal',20]]},
+  {groups:[[15,'normal',16]]},
+  {groups:[[12,'normal',14],[4,'fast',10]]},
+  {groups:[[10,'normal',12],[8,'fast',8]]},
+  {groups:[[20,'normal',10],[5,'fast',6]]},
+  {groups:[[15,'normal',10],[5,'tough',30]]},
+  {groups:[[10,'fast',7],[6,'tough',22]]},
+  {groups:[[18,'normal',8],[8,'fast',6],[4,'tough',18]]},
+  {groups:[[10,'tough',18],[12,'fast',6]]},
+  {groups:[[18,'tough',14]]},
+  {groups:[[20,'normal',8],[6,'armored',35]]},
+  {groups:[[12,'fast',6],[8,'tough',12],[4,'armored',28]]},
+  {groups:[[15,'armored',22]]},
+  {groups:[[20,'tough',12],[10,'armored',18]]},
+  {groups:[[25,'fast',5],[8,'armored',15]]},
+  {groups:[[22,'tough',10],[1,'boss',0]]},
+  {groups:[[15,'armored',14],[2,'boss',0]]},
+  {groups:[[20,'fast',5],[15,'tough',8],[2,'boss',0]]},
+  {groups:[[18,'armored',10],[3,'boss',0]]},
+  {groups:[[30,'armored',8],[5,'boss',0]]},
+];
+
+function buildSpawnQueue(waveDef) {
+  const queue = [];
+  let currentTick = 0;
+  for (const [count, type, gap] of waveDef.groups) {
+    for (let i = 0; i < count; i++) {
+      queue.push({ tick: currentTick + i * gap, type });
+    }
+    currentTick += (count - 1) * gap + Math.max(gap * 2, 40);
+  }
+  queue.sort((a, b) => a.tick - b.tick);
+  return queue;
+}
+
+// ── GAME STATE ────────────────────────────────────────────────────────────────
+
+let grid = [];
+let rabbits = [];
+let projectiles = [];
+let popEffects = [];
+let terrain = [];
+let lives = 20;
+let money = 150;
+let waveNum = 0;
+let spawnQueue = [];
+let waveTick = 0;
 let tickCount = 0;
-let waveNumber = 0;
-let ticksSinceWave = 0;
+let selTool = 'wolf';
+let selTower = null;
+let gameState = 'idle';
+let hoverCell = null;
+let statusTimeoutId = null;
+let totalKills = 0;
 
-// ─────────────────────────────────────────────
-//  FACTORIES
-// ─────────────────────────────────────────────
-const mkPlant  = () => ({ type: T.PLANT,  energy: 5,      age: 0 });
-const mkRabbit = () => ({ type: T.RABBIT, energy: R_INIT,  age: 0 });
-const mkWolf   = () => ({ type: T.WOLF,   energy: W_INIT,  age: 0 });
-
-// ─────────────────────────────────────────────
-//  GRID / TERRAIN HELPERS
-// ─────────────────────────────────────────────
-function initGrid() {
-  grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
-  terrain = Array.from({ length: ROWS }, () =>
-    Array.from({ length: COLS }, () => Math.floor(Math.random() * 21) - 10)
-  );
+function initState() {
+  grid = [];
+  rabbits = [];
+  projectiles = [];
+  popEffects = [];
+  terrain = [];
+  lives = 20;
+  money = 150;
+  waveNum = 0;
+  spawnQueue = [];
+  waveTick = 0;
   tickCount = 0;
-  waveNumber = 0;
-  ticksSinceWave = 0;
-}
-
-function spawnInitial() {
-  const idxs = shuffle(Array.from({ length: ROWS * COLS }, (_, i) => i));
-  let i = 0;
-  for (let n = 0; n < 115; n++) placeIdx(idxs[i++], mkPlant());
-  for (let n = 0; n < 26;  n++) placeIdx(idxs[i++], mkRabbit());
-  for (let n = 0; n < 7;   n++) placeIdx(idxs[i++], mkWolf());
-}
-
-function placeIdx(idx, entity) {
-  grid[Math.floor(idx / COLS)][idx % COLS] = entity;
-}
-
-function adjCells8(r, c) {
-  const a = [];
-  for (let dr = -1; dr <= 1; dr++) {
-    for (let dc = -1; dc <= 1; dc++) {
-      if (dr === 0 && dc === 0) continue;
-      const nr = r + dr, nc = c + dc;
-      if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) a.push([nr, nc]);
-    }
-  }
-  return a;
-}
-
-function adjCells4(r, c) {
-  const a = [];
-  if (r > 0)      a.push([r-1, c]);
-  if (r < ROWS-1) a.push([r+1, c]);
-  if (c > 0)      a.push([r, c-1]);
-  if (c < COLS-1) a.push([r, c+1]);
-  return a;
-}
-
-function emptyAdj8(r, c) {
-  return adjCells8(r, c).filter(([nr, nc]) => !grid[nr][nc]);
-}
-
-function emptyAdj4(r, c) {
-  return adjCells4(r, c).filter(([nr, nc]) => !grid[nr][nc]);
-}
-
-function countPops() {
-  pops = { [T.PLANT]: 0, [T.RABBIT]: 0, [T.WOLF]: 0 };
-  for (let r = 0; r < ROWS; r++)
-    for (let c = 0; c < COLS; c++)
-      if (grid[r][c]) pops[grid[r][c].type]++;
-}
-
-// Find nearest entity of given type within Chebyshev range
-function findInRange(r, c, type, range) {
-  let best = null, bestDist = Infinity;
-  const r0 = Math.max(0, r - range), r1 = Math.min(ROWS - 1, r + range);
-  const c0 = Math.max(0, c - range), c1 = Math.min(COLS - 1, c + range);
-  for (let nr = r0; nr <= r1; nr++) {
-    for (let nc = c0; nc <= c1; nc++) {
-      if (nr === r && nc === c) continue;
-      const e = grid[nr][nc];
-      if (e && e.type === type) {
-        const d = Math.max(Math.abs(nr - r), Math.abs(nc - c));
-        if (d < bestDist) { bestDist = d; best = [nr, nc]; }
-      }
-    }
-  }
-  return best;
-}
-
-// Find nearest plant within Manhattan distance vision
-function findNearestPlant(r, c, vision) {
-  let best = null, bestDist = Infinity;
-  const r0 = Math.max(0, r - vision), r1 = Math.min(ROWS - 1, r + vision);
-  const c0 = Math.max(0, c - vision), c1 = Math.min(COLS - 1, c + vision);
-  for (let nr = r0; nr <= r1; nr++) {
-    for (let nc = c0; nc <= c1; nc++) {
-      if (nr === r && nc === c) continue;
-      const e = grid[nr][nc];
-      if (e && e.type === T.PLANT) {
-        const d = Math.abs(nr - r) + Math.abs(nc - c);
-        if (d < bestDist) { bestDist = d; best = [nr, nc]; }
-      }
-    }
-  }
-  return best;
-}
-
-function sign(x) { return x > 0 ? 1 : x < 0 ? -1 : 0; }
-
-// ─────────────────────────────────────────────
-//  WAVE SPAWNING
-// ─────────────────────────────────────────────
-function spawnWave() {
-  const size = Math.min(3 + Math.floor(waveNumber * 0.6), 10);
-  waveNumber++;
-
-  // Collect edge cells (left col, top row, bottom row)
-  const edgeCells = [];
+  selTool = 'wolf';
+  selTower = null;
+  gameState = 'idle';
+  hoverCell = null;
+  totalKills = 0;
   for (let r = 0; r < ROWS; r++) {
-    if (!grid[r][0]) edgeCells.push([r, 0]);
-  }
-  for (let c = 1; c < COLS; c++) {
-    if (!grid[0][c]) edgeCells.push([0, c]);
-    if (!grid[ROWS-1][c]) edgeCells.push([ROWS-1, c]);
-  }
-  shuffle(edgeCells);
-  const toSpawn = Math.min(size, edgeCells.length);
-  for (let i = 0; i < toSpawn; i++) {
-    const [r, c] = edgeCells[i];
-    if (!grid[r][c]) grid[r][c] = mkRabbit();
+    grid.push(new Array(COLS).fill(null));
+    terrain.push([]);
+    for (let c = 0; c < COLS; c++) {
+      terrain[r].push(Math.floor(Math.random() * 16 - 8));
+    }
   }
 }
 
-// ─────────────────────────────────────────────
-//  SIMULATION STEP
-// ─────────────────────────────────────────────
+// ── SIMULATION ────────────────────────────────────────────────────────────────
+
+function spawnRabbit(type) {
+  const def = RABBIT_DEFS[type];
+  const pos = getPathPos(0);
+  rabbits.push({
+    type, hp: def.hp, maxHp: def.hp, speed: def.speed, reward: def.reward,
+    lives: def.lives, size: def.size, slowTicks: 0, dist: 0,
+    x: pos.x, y: pos.y, dead: false
+  });
+}
+
+function dealDmg(rab, dmg) {
+  rab.hp -= dmg;
+  if (rab.hp <= 0 && !rab.dead) {
+    rab.dead = true;
+    money += rab.reward;
+    totalKills++;
+    popEffects.push({ x: rab.x, y: rab.y, life: 12 });
+  }
+}
+
+function addProj(x0, y0, target, color) {
+  projectiles.push({ x0, y0, x1: target.x, y1: target.y, color, progress: 0 });
+}
+
 function step() {
   tickCount++;
-  ticksSinceWave++;
 
-  if (ticksSinceWave >= 30) {
-    spawnWave();
-    ticksSinceWave = 0;
+  if (gameState === 'wave') {
+    while (spawnQueue.length && spawnQueue[0].tick <= waveTick) {
+      const { type } = spawnQueue.shift();
+      spawnRabbit(type);
+    }
+    waveTick++;
   }
 
-  const plants = [], rabbits = [], wolves = [];
+  // Move rabbits
+  for (let i = rabbits.length - 1; i >= 0; i--) {
+    const rab = rabbits[i];
+    if (rab.dead) continue;
+    let spd = rab.speed;
+    if (rab.slowTicks > 0) { spd *= 0.5; rab.slowTicks--; }
+    rab.dist += spd;
+    if (rab.dist >= PATH_LEN) {
+      lives -= rab.lives;
+      rabbits.splice(i, 1);
+      if (lives <= 0) {
+        lives = 0;
+        endGame(false, 'The rabbits ate your carrots!');
+        return;
+      }
+      continue;
+    }
+    const pos = getPathPos(rab.dist);
+    rab.x = pos.x;
+    rab.y = pos.y;
+  }
+
+  // Towers attack
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
-      const e = grid[r][c];
-      if (!e) continue;
-      if (e.type === T.PLANT)  plants.push([r, c, e]);
-      if (e.type === T.RABBIT) rabbits.push([r, c, e]);
-      if (e.type === T.WOLF)   wolves.push([r, c, e]);
-    }
-  }
+      const tw = grid[r][c];
+      if (!tw) continue;
+      tw.cd = Math.max(0, tw.cd - 1);
+      if (tw.cd > 0) continue;
 
-  shuffle(wolves);
-  shuffle(rabbits);
-  shuffle(plants);
+      const tx = (c + 0.5) * CELL;
+      const ty = (r + 0.5) * CELL;
+      const rangePx = tw.range * CELL;
+      const def = TOWER_DEFS[tw.type];
 
-  // --- Wolves (towers): stationary, attack range, drift if hungry ---
-  for (const [r, c, wolf] of wolves) {
-    if (grid[r][c] !== wolf) continue;
+      const inRange = rabbits
+        .filter(rab => !rab.dead && Math.hypot(rab.x - tx, rab.y - ty) <= rangePx)
+        .sort((a, b) => b.dist - a.dist);
 
-    wolf.energy--;
-    wolf.age++;
+      if (!inRange.length) continue;
 
-    if (wolf.energy <= 0 || wolf.age > W_MAXAGE) {
-      grid[r][c] = null;
-      continue;
-    }
+      tw.cd = tw.cooldown;
+      const pc = def.projColor;
+      const at = tw.attackType || def.attackType;
 
-    // Find nearest rabbit in attack range (Chebyshev 2)
-    const preyPos = findInRange(r, c, T.RABBIT, WOLF_RANGE);
-    if (preyPos) {
-      const [pr, pc] = preyPos;
-      if (grid[pr][pc] && grid[pr][pc].type === T.RABBIT) {
-        // Kill rabbit, gain energy
-        grid[pr][pc] = null;
-        wolf.energy = Math.min(wolf.energy + W_GAIN, W_MAX_E);
-
-        // Reproduction
-        if (wolf.energy >= W_REPR && Math.random() < W_REPR_P) {
-          const empty = emptyAdj8(r, c);
-          if (empty.length > 0) {
-            const [nr, nc] = rnd(empty);
-            if (!grid[nr][nc]) {
-              grid[nr][nc] = mkWolf();
-              wolf.energy -= 15;
-            }
-          }
-        }
-      }
-    } else {
-      // No prey in attack range: drift toward nearest rabbit within 4 cells
-      const driftTarget = findInRange(r, c, T.RABBIT, W_DRIFT_RANGE);
-      if (driftTarget) {
-        const [tr, tc] = driftTarget;
-        const dr = sign(tr - r);
-        const dc = sign(tc - c);
-        // Try diagonal first, then cardinal steps
-        const candidates = [];
-        if (dr !== 0 && dc !== 0) candidates.push([r + dr, c + dc]);
-        if (dr !== 0) candidates.push([r + dr, c]);
-        if (dc !== 0) candidates.push([r, c + dc]);
-        for (const [nr, nc] of candidates) {
-          if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && !grid[nr][nc]) {
-            grid[nr][nc] = wolf;
-            grid[r][c] = null;
-            break;
-          }
-        }
+      switch (at) {
+        case 'single':
+          addProj(tx, ty, inRange[0], pc);
+          dealDmg(inRange[0], tw.damage);
+          break;
+        case 'aoe':
+          inRange.forEach(rab => { addProj(tx, ty, rab, pc); dealDmg(rab, tw.damage); });
+          break;
+        case 'pierce':
+          inRange.slice(0, tw.pierceCnt).forEach(rab => { addProj(tx, ty, rab, pc); dealDmg(rab, tw.damage); });
+          break;
+        case 'slow':
+          inRange[0].slowTicks = tw.slowDur;
+          addProj(tx, ty, inRange[0], pc);
+          break;
+        case 'multi':
+          inRange.slice(0, tw.multiCnt).forEach(rab => { addProj(tx, ty, rab, pc); dealDmg(rab, tw.damage); });
+          break;
       }
     }
   }
 
-  // --- Rabbits: seek nearest plant, move toward it, eat it ---
-  for (const [r, c, rabbit] of rabbits) {
-    if (grid[r][c] !== rabbit) continue;
+  // Remove dead rabbits
+  rabbits = rabbits.filter(rab => !rab.dead);
 
-    rabbit.energy--;
-    rabbit.age++;
-
-    if (rabbit.energy <= 0 || rabbit.age > R_MAXAGE) {
-      grid[r][c] = null;
-      continue;
-    }
-
-    const plantPos = findNearestPlant(r, c, R_VISION);
-    let moved = false;
-
-    if (plantPos) {
-      const [tr, tc] = plantPos;
-      // If on same cell (shouldn't be but guard), eat
-      if (tr === r && tc === c) {
-        // already there - shouldn't happen
-      } else {
-        const dr = sign(tr - r);
-        const dc = sign(tc - c);
-        // Try [r+dr, c+dc], [r+dr, c], [r, c+dc]
-        const steps = [];
-        if (dr !== 0 && dc !== 0) steps.push([r + dr, c + dc]);
-        if (dr !== 0) steps.push([r + dr, c]);
-        if (dc !== 0) steps.push([r, c + dc]);
-
-        for (const [nr, nc] of steps) {
-          if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) continue;
-          const cell = grid[nr][nc];
-          if (!cell) {
-            // Move to empty
-            grid[nr][nc] = rabbit;
-            grid[r][c] = null;
-            moved = true;
-            break;
-          } else if (cell.type === T.PLANT) {
-            // Eat plant
-            rabbit.energy = Math.min(rabbit.energy + R_GAIN, R_MAX_E);
-            grid[r][c] = null;
-            grid[nr][nc] = rabbit;
-            moved = true;
-            // Reproduction after eating
-            if (rabbit.energy >= R_REPR && Math.random() < R_REPR_P) {
-              const empty = emptyAdj8(nr, nc);
-              if (empty.length > 0) {
-                const [br, bc] = rnd(empty);
-                if (!grid[br][bc]) {
-                  grid[br][bc] = mkRabbit();
-                  rabbit.energy -= 12;
-                }
-              }
-            }
-            break;
-          }
-        }
-      }
-    }
-
-    if (!moved) {
-      // Random walk to adjacent empty cell
-      const empty = emptyAdj4(r, c);
-      if (empty.length > 0) {
-        const [nr, nc] = rnd(empty);
-        if (!grid[nr][nc]) {
-          grid[nr][nc] = rabbit;
-          grid[r][c] = null;
-        }
-      }
-    }
+  // Update projectiles
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    projectiles[i].progress += 0.18;
+    if (projectiles[i].progress >= 1) projectiles.splice(i, 1);
   }
 
-  // --- Plants: spread ---
-  for (const [r, c, plant] of plants) {
-    if (grid[r][c] !== plant) continue;
-    plant.age++;
-    if (Math.random() < PLANT_SPREAD) {
-      const empty = emptyAdj4(r, c);
-      if (empty.length > 0) {
-        const [nr, nc] = rnd(empty);
-        if (!grid[nr][nc]) grid[nr][nc] = mkPlant();
-      }
-    }
+  // Update pop effects
+  for (let i = popEffects.length - 1; i >= 0; i--) {
+    popEffects[i].life--;
+    if (popEffects[i].life <= 0) popEffects.splice(i, 1);
   }
 
-  countPops();
+  // Check wave complete
+  if (gameState === 'wave' && spawnQueue.length === 0 && rabbits.length === 0) {
+    const bonus = 20 + waveNum * 5;
+    money += bonus;
+    if (waveNum >= WAVE_DEFS.length) {
+      endGame(true);
+      return;
+    }
+    gameState = 'between';
+    setStatus('Wave ' + waveNum + ' Complete! +$' + bonus, 2500);
+    updateStartBtn();
+    updateUI();
+  }
 }
 
-// ─────────────────────────────────────────────
-//  SPRITE DRAWING
-// ─────────────────────────────────────────────
-function drawPlant(cx, r, c, vit) {
-  const x = c * CELL, y = r * CELL;
-  cx.save();
-  cx.translate(x, y);
+// ── GAME FLOW ─────────────────────────────────────────────────────────────────
 
-  // Stem
-  cx.fillStyle = '#5a3020';
-  cx.fillRect(9, 13, 2, 7);
-
-  // Left leaf
-  cx.fillStyle = vit > 0.6 ? '#44cc44' : '#2a8a2a';
-  cx.beginPath();
-  cx.ellipse(5, 11, 5, 2.5, -0.4, 0, Math.PI * 2);
-  cx.fill();
-
-  // Right leaf
-  cx.beginPath();
-  cx.ellipse(15, 8, 5, 2.5, 0.4, 0, Math.PI * 2);
-  cx.fill();
-
-  // Bud
-  cx.fillStyle = vit > 0.8 ? '#88ee88' : vit > 0.4 ? '#55cc55' : '#2a8c2a';
-  cx.beginPath();
-  cx.arc(10, 5, 4, 0, Math.PI * 2);
-  cx.fill();
-
-  // Bud highlight
-  cx.fillStyle = 'rgba(255,255,255,0.2)';
-  cx.beginPath();
-  cx.arc(8, 4, 1.5, 0, Math.PI * 2);
-  cx.fill();
-
-  cx.restore();
+function startWave() {
+  if (gameState !== 'between' && gameState !== 'idle') return;
+  if (waveNum >= WAVE_DEFS.length) return;
+  waveNum++;
+  spawnQueue = buildSpawnQueue(WAVE_DEFS[waveNum - 1]);
+  waveTick = 0;
+  gameState = 'wave';
+  updateStartBtn();
+  updateUI();
 }
 
-function drawRabbit(cx, r, c, vit) {
-  const x = c * CELL, y = r * CELL;
-  const bodyColor = vit > 0.5 ? '#d4a840' : vit > 0.25 ? '#a88030' : '#785020';
-  cx.save();
-  cx.translate(x, y);
-
-  // Left ear
-  cx.fillStyle = bodyColor;
-  cx.fillRect(4, 0, 4, 10);
-  // Left inner ear
-  cx.fillStyle = '#e8a0a0';
-  cx.fillRect(5, 1, 2, 8);
-
-  // Right ear
-  cx.fillStyle = bodyColor;
-  cx.fillRect(12, 0, 4, 10);
-  // Right inner ear
-  cx.fillStyle = '#e8a0a0';
-  cx.fillRect(13, 1, 2, 8);
-
-  // Head
-  cx.fillStyle = bodyColor;
-  cx.beginPath();
-  cx.arc(10, 11, 5, 0, Math.PI * 2);
-  cx.fill();
-
-  // Body
-  cx.fillStyle = bodyColor;
-  cx.beginPath();
-  cx.ellipse(10, 17, 6, 4, 0, 0, Math.PI * 2);
-  cx.fill();
-
-  // Eyes
-  cx.fillStyle = '#1a0a00';
-  cx.fillRect(7, 9, 2, 2);
-  cx.fillRect(11, 9, 2, 2);
-
-  // Eye shine
-  cx.fillStyle = '#ffffff';
-  cx.fillRect(8, 9, 1, 1);
-  cx.fillRect(12, 9, 1, 1);
-
-  // Nose
-  cx.fillStyle = '#cc7070';
-  cx.beginPath();
-  cx.arc(10, 12.5, 1.5, 0, Math.PI * 2);
-  cx.fill();
-
-  // Tail
-  cx.fillStyle = '#f0e8d0';
-  cx.beginPath();
-  cx.arc(17, 16, 2.5, 0, Math.PI * 2);
-  cx.fill();
-
-  cx.restore();
+function endGame(won, reason) {
+  gameState = won ? 'won' : 'lost';
+  const overlay = document.getElementById('overlay');
+  const titleEl = document.getElementById('overlay-title');
+  const msgEl = document.getElementById('overlay-msg');
+  const subEl = document.getElementById('overlay-sub');
+  overlay.classList.add('show');
+  if (won) {
+    titleEl.textContent = 'VICTORY!';
+    titleEl.className = 'win';
+    msgEl.textContent = 'All 20 waves survived!';
+    subEl.textContent = 'Rabbits defeated: ' + totalKills + ' | Lives remaining: ' + lives;
+  } else {
+    titleEl.textContent = 'DEFEATED';
+    titleEl.className = 'lose';
+    msgEl.textContent = reason || 'You have been defeated.';
+    subEl.textContent = 'Reached wave ' + waveNum + '/20 | Rabbits defeated: ' + totalKills;
+  }
+  updateStartBtn();
 }
 
-function drawWolf(cx, r, c, vit) {
-  const x = c * CELL, y = r * CELL;
-  const bodyColor = vit > 0.5 ? '#7878b8' : vit > 0.25 ? '#5858a0' : '#383880';
-  cx.save();
-  cx.translate(x, y);
+function updateStartBtn() {
+  const btn = document.getElementById('start-btn');
+  if (gameState === 'wave') {
+    btn.textContent = 'WAVE ' + waveNum + ' IN PROGRESS...';
+    btn.disabled = true;
+  } else if (gameState === 'won' || gameState === 'lost') {
+    btn.textContent = 'GAME OVER';
+    btn.disabled = true;
+  } else {
+    btn.textContent = 'START WAVE ' + (waveNum + 1);
+    btn.disabled = false;
+  }
+}
 
-  // Left ear triangle
-  cx.fillStyle = bodyColor;
-  cx.beginPath();
-  cx.moveTo(2, 8);
-  cx.lineTo(5, 0);
-  cx.lineTo(9, 7);
-  cx.closePath();
-  cx.fill();
+function updateUI() {
+  const livesEl = document.getElementById('lives-disp');
+  livesEl.textContent = '\u2764\uFE0F Lives: ' + lives;
+  livesEl.className = 'stat' + (lives <= 5 ? ' danger' : '');
 
-  // Left inner ear
-  cx.fillStyle = '#cc9090';
-  cx.beginPath();
-  cx.moveTo(4, 7);
-  cx.lineTo(5, 2);
-  cx.lineTo(8, 7);
-  cx.closePath();
-  cx.fill();
+  const moneyEl = document.getElementById('money-disp');
+  const minCost = Math.min(...Object.values(TOWER_DEFS).map(d => d.cost));
+  moneyEl.textContent = '\uD83D\uDCB0 $' + money;
+  moneyEl.className = 'stat' + (money < minCost ? ' low' : '');
 
-  // Right ear triangle
-  cx.fillStyle = bodyColor;
-  cx.beginPath();
-  cx.moveTo(11, 7);
-  cx.lineTo(15, 0);
-  cx.lineTo(18, 8);
-  cx.closePath();
-  cx.fill();
+  document.getElementById('wave-display').textContent = 'Wave ' + waveNum + '/20';
 
-  // Right inner ear
-  cx.fillStyle = '#cc9090';
-  cx.beginPath();
-  cx.moveTo(12, 7);
-  cx.lineTo(15, 2);
-  cx.lineTo(16, 7);
-  cx.closePath();
-  cx.fill();
+  for (const [type, def] of Object.entries(TOWER_DEFS)) {
+    const card = document.getElementById('card-' + type);
+    if (card) {
+      card.classList.toggle('disabled', money < def.cost);
+      card.classList.toggle('selected', selTool === type && !selTower);
+    }
+  }
+}
 
-  // Head
-  cx.fillStyle = bodyColor;
-  cx.beginPath();
-  cx.arc(10, 10, 6, 0, Math.PI * 2);
-  cx.fill();
+function setStatus(msg, duration) {
+  document.getElementById('status-msg').textContent = msg;
+  if (statusTimeoutId) clearTimeout(statusTimeoutId);
+  if (duration) {
+    statusTimeoutId = setTimeout(() => {
+      document.getElementById('status-msg').textContent = '';
+    }, duration);
+  }
+}
 
-  // Body
-  cx.fillStyle = bodyColor;
-  cx.beginPath();
-  cx.ellipse(10, 17, 7, 4, 0, 0, Math.PI * 2);
-  cx.fill();
+// ── SPRITE DRAWING ────────────────────────────────────────────────────────────
 
-  // Snout
-  cx.fillStyle = '#b0b0c8';
-  cx.beginPath();
-  cx.ellipse(10, 13, 3.5, 2.5, 0, 0, Math.PI * 2);
-  cx.fill();
+function drawWolf(c, x, y) {
+  c.save();
+  c.translate(x, y);
+  c.fillStyle = '#445588';
+  c.beginPath(); c.arc(10, 10, 8, 0, PI * 2); c.fill();
+  c.strokeStyle = '#6666aa'; c.lineWidth = 1;
+  c.beginPath(); c.arc(10, 10, 8, 0, PI * 2); c.stroke();
+  c.fillStyle = '#6666aa';
+  c.beginPath(); c.moveTo(2, 7); c.lineTo(5, 0); c.lineTo(9, 6); c.closePath(); c.fill();
+  c.beginPath(); c.moveTo(11, 6); c.lineTo(15, 0); c.lineTo(18, 7); c.closePath(); c.fill();
+  c.fillStyle = '#ffcc00';
+  c.fillRect(5, 7, 3, 3);
+  c.fillRect(12, 7, 3, 3);
+  c.fillStyle = '#9999bb';
+  c.beginPath(); c.ellipse(10, 13, 3, 2, 0, 0, PI * 2); c.fill();
+  c.fillStyle = '#222244';
+  c.beginPath(); c.arc(10, 11, 1.5, 0, PI * 2); c.fill();
+  c.restore();
+}
 
-  // Eye glow
-  if (vit > 0.3) {
-    cx.fillStyle = 'rgba(255,200,0,0.25)';
-    cx.beginPath();
-    cx.arc(7.5, 9.5, 4, 0, Math.PI * 2);
-    cx.fill();
-    cx.beginPath();
-    cx.arc(12.5, 9.5, 4, 0, Math.PI * 2);
-    cx.fill();
+function drawBear(c, x, y) {
+  c.save();
+  c.translate(x, y);
+  c.fillStyle = '#664422';
+  c.beginPath(); c.arc(10, 10, 8, 0, PI * 2); c.fill();
+  c.fillStyle = '#886633';
+  c.beginPath(); c.arc(10, 11, 7, 0, PI * 2); c.fill();
+  c.beginPath(); c.arc(4, 4, 3, 0, PI * 2); c.fill();
+  c.beginPath(); c.arc(16, 4, 3, 0, PI * 2); c.fill();
+  c.fillStyle = '#aa8844';
+  c.beginPath(); c.ellipse(10, 13, 4, 3, 0, 0, PI * 2); c.fill();
+  c.fillStyle = '#1a0a00';
+  c.fillRect(6, 7, 3, 3);
+  c.fillRect(11, 7, 3, 3);
+  c.fillStyle = '#331100';
+  c.beginPath(); c.arc(10, 12, 1.5, 0, PI * 2); c.fill();
+  c.strokeStyle = '#551100'; c.lineWidth = 1;
+  c.beginPath(); c.moveTo(7, 17); c.lineTo(6, 19); c.stroke();
+  c.beginPath(); c.moveTo(10, 17); c.lineTo(10, 19); c.stroke();
+  c.beginPath(); c.moveTo(13, 17); c.lineTo(14, 19); c.stroke();
+  c.restore();
+}
+
+function drawEagle(c, x, y) {
+  c.save();
+  c.translate(x, y);
+  c.fillStyle = '#887722';
+  c.beginPath(); c.arc(10, 10, 8, 0, PI * 2); c.fill();
+  c.fillStyle = '#ccaa22';
+  c.beginPath(); c.moveTo(5, 10); c.bezierCurveTo(0, 6, 0, 14, 5, 13); c.closePath(); c.fill();
+  c.beginPath(); c.moveTo(15, 10); c.bezierCurveTo(20, 6, 20, 14, 15, 13); c.closePath(); c.fill();
+  c.beginPath(); c.ellipse(10, 12, 5, 6, 0, 0, PI * 2); c.fill();
+  c.beginPath(); c.arc(10, 6, 4, 0, PI * 2); c.fill();
+  c.fillStyle = '#ff8800';
+  c.beginPath(); c.moveTo(8, 7); c.lineTo(12, 7); c.lineTo(10, 11); c.closePath(); c.fill();
+  c.fillStyle = '#ffee00';
+  c.beginPath(); c.arc(8, 5, 1.5, 0, PI * 2); c.fill();
+  c.beginPath(); c.arc(12, 5, 1.5, 0, PI * 2); c.fill();
+  c.restore();
+}
+
+function drawSkunk(c, x, y) {
+  c.save();
+  c.translate(x, y);
+  c.fillStyle = '#333333';
+  c.beginPath(); c.arc(10, 10, 8, 0, PI * 2); c.fill();
+  c.fillStyle = '#111111';
+  c.beginPath(); c.ellipse(10, 12, 6, 7, 0, 0, PI * 2); c.fill();
+  c.fillStyle = '#eeeeee';
+  c.fillRect(9, 4, 2, 14);
+  c.fillStyle = '#111111';
+  c.beginPath(); c.arc(10, 5, 4, 0, PI * 2); c.fill();
+  c.fillStyle = '#eeeeee';
+  c.fillRect(9, 2, 2, 5);
+  c.fillStyle = '#ff2222';
+  c.fillRect(7, 4, 2, 2);
+  c.fillRect(11, 4, 2, 2);
+  c.fillStyle = '#111111';
+  c.beginPath(); c.arc(16, 3, 5, PI, PI * 2); c.fill();
+  c.fillStyle = '#eeeeee';
+  c.beginPath(); c.arc(16, 3, 4, PI, PI * 2); c.fill();
+  c.restore();
+}
+
+function drawFox(c, x, y) {
+  c.save();
+  c.translate(x, y);
+  c.fillStyle = '#992200';
+  c.beginPath(); c.arc(10, 10, 8, 0, PI * 2); c.fill();
+  c.fillStyle = '#cc5511';
+  c.beginPath(); c.moveTo(2, 8); c.lineTo(6, 0); c.lineTo(10, 7); c.closePath(); c.fill();
+  c.beginPath(); c.moveTo(10, 7); c.lineTo(14, 0); c.lineTo(18, 8); c.closePath(); c.fill();
+  c.fillStyle = '#ee8844';
+  c.beginPath(); c.moveTo(4, 7); c.lineTo(6, 2); c.lineTo(9, 7); c.closePath(); c.fill();
+  c.beginPath(); c.moveTo(11, 7); c.lineTo(14, 2); c.lineTo(16, 7); c.closePath(); c.fill();
+  c.fillStyle = '#cc5511';
+  c.beginPath(); c.ellipse(10, 13, 6, 6, 0, 0, PI * 2); c.fill();
+  c.beginPath(); c.arc(10, 10, 5, 0, PI * 2); c.fill();
+  c.fillStyle = '#ffee00';
+  c.fillRect(6, 8, 3, 3);
+  c.fillRect(11, 8, 3, 3);
+  c.fillStyle = '#ffddbb';
+  c.beginPath(); c.ellipse(10, 13, 3, 2, 0, 0, PI * 2); c.fill();
+  c.fillStyle = '#331100';
+  c.beginPath(); c.arc(10, 12, 1, 0, PI * 2); c.fill();
+  c.restore();
+}
+
+const SPRITE_DRAW = { wolf: drawWolf, bear: drawBear, eagle: drawEagle, skunk: drawSkunk, fox: drawFox };
+
+function drawTower(c, x, y, tw) {
+  SPRITE_DRAW[tw.type](c, x, y);
+  if (tw.level === 2) {
+    c.fillStyle = '#ffcc00';
+    c.font = '9px monospace';
+    c.textAlign = 'left';
+    c.fillText('\u2605', x + 12, y + 8);
+  }
+  if (tw.cd > 0) {
+    c.strokeStyle = 'rgba(0,0,0,0.6)';
+    c.lineWidth = 3;
+    c.beginPath();
+    c.arc(x + 10, y + 10, 8, -PI / 2, -PI / 2 + (tw.cd / tw.cooldown) * PI * 2);
+    c.stroke();
+  }
+}
+
+// ── RABBIT SPRITES ────────────────────────────────────────────────────────────
+
+function drawRabbitSprite(c, rab) {
+  const def = RABBIT_DEFS[rab.type];
+  const s = def.size;
+  const R = 7 * s;
+
+  if (rab.slowTicks > 0) {
+    c.fillStyle = 'rgba(100,160,255,0.3)';
+    c.beginPath(); c.arc(0, 0, R + 4, 0, PI * 2); c.fill();
   }
 
-  // Left eye
-  cx.fillStyle = '#ffcc00';
-  cx.fillRect(6, 8, 3, 3);
+  c.fillStyle = def.color;
+  c.fillRect(-R * 0.6 - 2, -R * 1.4, R * 0.45, R);
+  c.fillRect(R * 0.2 - 2,  -R * 1.4, R * 0.45, R);
+  c.fillStyle = '#e8a0a0';
+  c.fillRect(-R * 0.6 - 1, -R * 1.35, R * 0.3, R * 0.85);
+  c.fillRect(R * 0.2 - 1,  -R * 1.35, R * 0.3, R * 0.85);
 
-  // Right eye
-  cx.fillStyle = '#ffcc00';
-  cx.fillRect(11, 8, 3, 3);
+  c.fillStyle = def.color;
+  c.beginPath(); c.arc(0, 0, R, 0, PI * 2); c.fill();
 
-  // Nose
-  cx.fillStyle = '#1a1a2a';
-  cx.beginPath();
-  cx.arc(10, 11.5, 1.5, 0, Math.PI * 2);
-  cx.fill();
+  c.fillStyle = '#1a0a00';
+  c.fillRect(-R * 0.45, -R * 0.3, R * 0.35, R * 0.35);
+  c.fillRect( R * 0.1,  -R * 0.3, R * 0.35, R * 0.35);
+  c.fillStyle = '#ffffff';
+  c.fillRect(-R * 0.4,  -R * 0.3, R * 0.15, R * 0.15);
+  c.fillRect( R * 0.15, -R * 0.3, R * 0.15, R * 0.15);
 
-  cx.restore();
+  c.fillStyle = '#cc7070';
+  c.beginPath(); c.arc(0, R * 0.35, R * 0.2, 0, PI * 2); c.fill();
+
+  c.fillStyle = '#f0e8d0';
+  c.beginPath(); c.arc(R * 0.9, R * 0.2, R * 0.3, 0, PI * 2); c.fill();
+
+  if (rab.maxHp > 2) {
+    const bw = R * 2.5, bh = 4;
+    const bx = -R * 1.25, by = R + 4;
+    c.fillStyle = '#333';
+    c.fillRect(bx, by, bw, bh);
+    const frac = Math.max(0, rab.hp / rab.maxHp);
+    c.fillStyle = frac > 0.5 ? '#55cc55' : frac > 0.25 ? '#ffaa00' : '#ff4444';
+    c.fillRect(bx, by, bw * frac, bh);
+  }
+
+  if (rab.type === 'boss') {
+    c.fillStyle = '#ff6666';
+    c.font = 'bold 8px monospace';
+    c.textAlign = 'center';
+    c.fillText('BOSS', 0, -R * 1.8);
+  }
 }
 
-// ─────────────────────────────────────────────
-//  RENDERING
-// ─────────────────────────────────────────────
+// ── PATH ARROWS ───────────────────────────────────────────────────────────────
+
+function drawPathArrows() {
+  bctx.fillStyle = 'rgba(180,140,60,0.5)';
+  for (let d = 2; d < PATH_LEN - 1; d += 5) {
+    const p0 = getPathPos(d);
+    const p1 = getPathPos(d + 0.5);
+    const angle = Math.atan2(p1.y - p0.y, p1.x - p0.x);
+    const size = 4;
+    bctx.save();
+    bctx.translate(p0.x, p0.y);
+    bctx.rotate(angle);
+    bctx.beginPath();
+    bctx.moveTo(size, 0);
+    bctx.lineTo(-size * 0.6, -size * 0.5);
+    bctx.lineTo(-size * 0.6,  size * 0.5);
+    bctx.closePath();
+    bctx.fill();
+    bctx.restore();
+  }
+}
+
+// ── SPAWN PORTAL ──────────────────────────────────────────────────────────────
+
+function drawSpawnPortal() {
+  const [c0, r0] = WAYPOINTS[0];
+  const x = (c0 + 0.5) * CELL;
+  const y = (r0 + 0.5) * CELL;
+  const pulse = 0.4 + 0.3 * Math.sin(tickCount * 0.08);
+  bctx.fillStyle = 'rgba(0,200,0,' + (pulse * 0.4) + ')';
+  bctx.beginPath(); bctx.arc(x, y, 10, 0, PI * 2); bctx.fill();
+  bctx.strokeStyle = 'rgba(0,255,0,' + pulse + ')';
+  bctx.lineWidth = 2;
+  bctx.beginPath();
+  bctx.arc(x, y, 10 + 2 * Math.sin(tickCount * 0.08), 0, PI * 2);
+  bctx.stroke();
+}
+
+// ── CARROT ────────────────────────────────────────────────────────────────────
+
+function drawCarrot() {
+  const [cw, rw] = WAYPOINTS[WAYPOINTS.length - 1];
+  const x = cw * CELL;
+  const y = rw * CELL;
+  bctx.fillStyle = '#ff8800';
+  bctx.beginPath();
+  bctx.moveTo(x + 4,  y + 3);
+  bctx.lineTo(x + 16, y + 3);
+  bctx.lineTo(x + 10, y + 17);
+  bctx.closePath();
+  bctx.fill();
+  bctx.fillStyle = '#dd6600';
+  bctx.beginPath();
+  bctx.moveTo(x + 8,  y + 12);
+  bctx.lineTo(x + 12, y + 12);
+  bctx.lineTo(x + 10, y + 17);
+  bctx.closePath();
+  bctx.fill();
+  bctx.fillStyle = '#228822';
+  bctx.beginPath(); bctx.ellipse(x + 7,  y + 3, 4, 2, -0.5, 0, PI); bctx.fill();
+  bctx.beginPath(); bctx.ellipse(x + 13, y + 3, 4, 2,  0.5, 0, PI); bctx.fill();
+  bctx.beginPath(); bctx.ellipse(x + 10, y + 1, 2, 4,  0,   0, PI); bctx.fill();
+}
+
+// ── RANGE CIRCLE ──────────────────────────────────────────────────────────────
+
+function drawRangeCircle(col, row, range, style) {
+  const cx = (col + 0.5) * CELL;
+  const cy = (row + 0.5) * CELL;
+  bctx.fillStyle = style.replace(/[\d.]+\)$/, '0.07)');
+  bctx.beginPath(); bctx.arc(cx, cy, range * CELL, 0, PI * 2); bctx.fill();
+  bctx.strokeStyle = style;
+  bctx.lineWidth = 1.5;
+  bctx.setLineDash([5, 4]);
+  bctx.beginPath(); bctx.arc(cx, cy, range * CELL, 0, PI * 2); bctx.stroke();
+  bctx.setLineDash([]);
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────────
+
 function render() {
-  // Draw terrain for all cells
+  bctx.fillStyle = '#0a160a';
+  bctx.fillRect(0, 0, W, H);
+
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const t = terrain[r][c];
-      const v = 10 + t;
-      bctx.fillStyle = `rgb(${v},${22 + t},${v})`;
+      if (PATH_CELLS.has(r * COLS + c)) {
+        bctx.fillStyle = 'rgb(' + (100 + t) + ',' + (70 + t) + ',' + (30 + t) + ')';
+      } else {
+        bctx.fillStyle = 'rgb(' + (12 + t) + ',' + (25 + t) + ',' + (12 + t) + ')';
+      }
       bctx.fillRect(c * CELL, r * CELL, CELL, CELL);
     }
   }
 
-  // Wolf range circles (dim)
-  bctx.save();
-  bctx.strokeStyle = 'rgba(120,120,200,0.12)';
-  bctx.lineWidth = 1;
-  bctx.setLineDash([4, 4]);
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      const e = grid[r][c];
-      if (e && e.type === T.WOLF) {
-        const cx2 = c * CELL + CELL / 2;
-        const cy2 = r * CELL + CELL / 2;
-        const radius = (WOLF_RANGE + 0.5) * CELL;
-        bctx.beginPath();
-        bctx.arc(cx2, cy2, radius, 0, Math.PI * 2);
-        bctx.stroke();
-      }
+  drawPathArrows();
+  drawSpawnPortal();
+  drawCarrot();
+
+  if (selTower) {
+    const tw = grid[selTower.r][selTower.c];
+    if (tw) drawRangeCircle(selTower.c, selTower.r, tw.range, 'rgba(200,200,100,0.4)');
+  } else if (hoverCell) {
+    const { r, c } = hoverCell;
+    if (!PATH_CELLS.has(r * COLS + c) && !grid[r][c]) {
+      const def = TOWER_DEFS[selTool];
+      drawRangeCircle(c, r, def.range, 'rgba(150,150,255,0.35)');
     }
   }
-  bctx.setLineDash([]);
-  bctx.restore();
 
-  // Hover preview for wolf tool
-  if (hoverCell && gameState === 'playing' && selTool === 'wolf') {
-    const { r, c } = hoverCell;
-    const hx = c * CELL + CELL / 2;
-    const hy = r * CELL + CELL / 2;
-    const radius = (WOLF_RANGE + 0.5) * CELL;
-
-    // Highlight cells in range
-    const canAfford = spirit >= COST.wolf;
-    for (let nr = Math.max(0, r - WOLF_RANGE); nr <= Math.min(ROWS-1, r + WOLF_RANGE); nr++) {
-      for (let nc = Math.max(0, c - WOLF_RANGE); nc <= Math.min(COLS-1, c + WOLF_RANGE); nc++) {
-        if (nr === r && nc === c) continue;
-        bctx.fillStyle = 'rgba(100,100,180,0.08)';
-        bctx.fillRect(nc * CELL, nr * CELL, CELL, CELL);
-      }
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (grid[r][c]) drawTower(bctx, c * CELL, r * CELL, grid[r][c]);
     }
+  }
 
-    // Brighter range circle
-    bctx.save();
-    bctx.strokeStyle = canAfford ? 'rgba(140,140,220,0.4)' : 'rgba(255,80,80,0.4)';
-    bctx.lineWidth = 1.5;
-    bctx.setLineDash([4, 4]);
+  if (selTower) {
+    bctx.strokeStyle = '#ffcc00';
+    bctx.lineWidth = 2;
+    bctx.strokeRect(selTower.c * CELL + 1, selTower.r * CELL + 1, CELL - 2, CELL - 2);
+  }
+
+  for (const fx of popEffects) {
+    const prog = 1 - fx.life / 12;
+    bctx.strokeStyle = 'rgba(255,220,50,' + (fx.life / 12) + ')';
+    bctx.lineWidth = 2;
     bctx.beginPath();
-    bctx.arc(hx, hy, radius, 0, Math.PI * 2);
+    bctx.arc(fx.x, fx.y, prog * 18 + 4, 0, PI * 2);
     bctx.stroke();
-    bctx.setLineDash([]);
+  }
+
+  for (const p of projectiles) {
+    const px = p.x0 + (p.x1 - p.x0) * p.progress;
+    const py = p.y0 + (p.y1 - p.y0) * p.progress;
+    bctx.fillStyle = p.color;
+    bctx.beginPath();
+    bctx.arc(px, py, 3, 0, PI * 2);
+    bctx.fill();
+  }
+
+  for (const rab of rabbits) {
+    bctx.save();
+    bctx.translate(rab.x, rab.y);
+    drawRabbitSprite(bctx, rab);
     bctx.restore();
-  }
-
-  // Draw entities
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      const e = grid[r][c];
-      if (!e) continue;
-      const maxE = e.type === T.WOLF ? W_MAX_E : e.type === T.RABBIT ? R_MAX_E : 10;
-      const vit  = Math.max(0, Math.min(1, e.energy / maxE));
-      if (e.type === T.PLANT)  drawPlant(bctx, r, c, vit);
-      if (e.type === T.RABBIT) drawRabbit(bctx, r, c, vit);
-      if (e.type === T.WOLF)   drawWolf(bctx, r, c, vit);
-    }
-  }
-
-  // Hover cursor outline
-  if (hoverCell && gameState === 'playing') {
-    const { r, c } = hoverCell;
-    const canAfford = spirit >= COST[selTool];
-    if (!canAfford) {
-      bctx.fillStyle = 'rgba(255,50,50,0.2)';
-      bctx.fillRect(c * CELL, r * CELL, CELL, CELL);
-    }
-    bctx.strokeStyle = !canAfford ? 'rgba(255,80,80,0.8)' :
-                       selTool === 'plant'  ? '#55cc55' :
-                       selTool === 'rabbit' ? '#ddaa44' : '#9999dd';
-    bctx.lineWidth = 1.5;
-    bctx.strokeRect(c * CELL + 0.75, r * CELL + 0.75, CELL - 1.5, CELL - 1.5);
   }
 
   ctx.drawImage(buf, 0, 0);
 }
 
-// ─────────────────────────────────────────────
-//  UI
-// ─────────────────────────────────────────────
-function updateUI(now) {
-  const pc = pops[T.PLANT]  || 0;
-  const rc = pops[T.RABBIT] || 0;
-  const wc = pops[T.WOLF]   || 0;
+// ── TOWER PANEL ───────────────────────────────────────────────────────────────
 
-  document.getElementById('cnt-plant').textContent  = pc;
-  document.getElementById('cnt-rabbit').textContent = rc;
-  document.getElementById('cnt-wolf').textContent   = wc;
+function buildTowerCards() {
+  const container = document.getElementById('tower-cards');
+  container.innerHTML = '';
+  for (const [type, def] of Object.entries(TOWER_DEFS)) {
+    const card = document.createElement('div');
+    card.className = 'tower-card';
+    card.id = 'card-' + type;
+    card.onclick = () => { if (money >= def.cost || true) setTool(type); };
 
-  setBar('plant',  pc, MAX_POP[T.PLANT],  MIN[T.PLANT],  '#3ab03a', '#ffaa00', '#ff4444');
-  setBar('rabbit', rc, MAX_POP[T.RABBIT], MIN[T.RABBIT], '#c09040', '#ffcc44', '#ff4444');
-  setBar('wolf',   wc, MAX_POP[T.WOLF],   MIN[T.WOLF],   '#6868aa', '#aaaaee', '#ff4444');
+    const header = document.createElement('div');
+    header.className = 'card-header';
 
-  // Energy orbs
-  const orbEl = document.getElementById('energy-orbs');
-  orbEl.innerHTML = '';
-  for (let i = 0; i < MAX_ENERGY; i++) {
-    const d = document.createElement('div');
-    d.className = 'orb' + (i < spirit ? ' lit' : '');
-    orbEl.appendChild(d);
+    const iconCanvas = document.createElement('canvas');
+    iconCanvas.className = 'card-icon';
+    iconCanvas.width = 28;
+    iconCanvas.height = 28;
+    const ic = iconCanvas.getContext('2d');
+    ic.save();
+    ic.scale(28 / 20, 28 / 20);
+    SPRITE_DRAW[type](ic, 0, 0);
+    ic.restore();
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'card-name';
+    nameSpan.textContent = def.name + ' [' + def.key + ']';
+
+    const costSpan = document.createElement('span');
+    costSpan.className = 'card-cost';
+    costSpan.textContent = '$' + def.cost;
+
+    header.appendChild(iconCanvas);
+    header.appendChild(nameSpan);
+    header.appendChild(costSpan);
+
+    const descDiv = document.createElement('div');
+    descDiv.className = 'card-desc';
+    descDiv.textContent = def.desc;
+
+    card.appendChild(header);
+    card.appendChild(descDiv);
+    container.appendChild(card);
   }
+}
 
-  // Timer
-  if (gameState === 'playing') {
-    const elapsed = now - t0;
-    const remain  = Math.max(0, WIN_MS - elapsed);
-    const m = Math.floor(remain / 60000);
-    const s = Math.floor((remain % 60000) / 1000);
-    document.getElementById('timer').textContent =
-      `${m}:${String(s).padStart(2, '0')}`;
-    document.getElementById('win-bar').style.width =
-      (elapsed / WIN_MS * 100).toFixed(1) + '%';
+function setTool(type) {
+  selTool = type;
+  selTower = null;
+  updateTowerPanel();
+  updateUI();
+}
 
-    // Wave info
-    const ticksUntilWave = 30 - ticksSinceWave;
-    const secsUntilWave  = Math.ceil(ticksUntilWave * TICK_MS / 1000);
-    document.getElementById('wave-num').textContent  = waveNumber;
-    document.getElementById('wave-next').textContent = secsUntilWave + 's';
+function updateTowerPanel() {
+  const cardsDiv = document.getElementById('tower-cards');
+  const infoDiv = document.getElementById('sel-tower-info');
+
+  if (selTower) {
+    const tw = grid[selTower.r][selTower.c];
+    if (!tw) {
+      selTower = null;
+      cardsDiv.style.display = 'flex';
+      infoDiv.style.display = 'none';
+      return;
+    }
+    cardsDiv.style.display = 'none';
+    infoDiv.style.display = 'flex';
+
+    const def = TOWER_DEFS[tw.type];
+    const upg = UPGRADES[tw.type];
+    const sellPrice = Math.floor(tw.totalCost * 0.7);
+    const canUpgrade = tw.level < 2 && money >= upg.cost;
+
+    infoDiv.innerHTML = '';
+
+    const titleDiv = document.createElement('div');
+    titleDiv.className = 'tw-title';
+    titleDiv.textContent = def.name + '  Lv.' + tw.level;
+    infoDiv.appendChild(titleDiv);
+
+    const statsDiv = document.createElement('div');
+    statsDiv.className = 'tw-stats';
+    statsDiv.textContent = 'Dmg: ' + tw.damage + ' | Range: ' + tw.range.toFixed(1);
+    infoDiv.appendChild(statsDiv);
+
+    const statsDiv2 = document.createElement('div');
+    statsDiv2.className = 'tw-stats';
+    statsDiv2.textContent = 'Type: ' + def.attackType;
+    infoDiv.appendChild(statsDiv2);
+
+    const hr = document.createElement('hr');
+    infoDiv.appendChild(hr);
+
+    const upgBtn = document.createElement('button');
+    upgBtn.id = 'btn-upgrade';
+    upgBtn.disabled = !canUpgrade;
+    upgBtn.innerHTML = 'Upgrade: $' + upg.cost + '<br>' + upg.name + ' - ' + upg.desc;
+    upgBtn.onclick = () => {
+      const t2 = grid[selTower.r][selTower.c];
+      if (!t2 || t2.level >= 2 || money < upg.cost) return;
+      money -= upg.cost;
+      t2.totalCost += upg.cost;
+      t2.level = 2;
+      applyUpgrade(t2);
+      updateTowerPanel();
+      updateUI();
+    };
+    infoDiv.appendChild(upgBtn);
+
+    const sellBtn = document.createElement('button');
+    sellBtn.id = 'btn-sell';
+    sellBtn.textContent = 'Sell ($' + sellPrice + ')';
+    sellBtn.onclick = () => {
+      const t2 = grid[selTower.r][selTower.c];
+      if (!t2) return;
+      money += Math.floor(t2.totalCost * 0.7);
+      grid[selTower.r][selTower.c] = null;
+      selTower = null;
+      updateTowerPanel();
+      updateUI();
+    };
+    infoDiv.appendChild(sellBtn);
+
+    const deselBtn = document.createElement('button');
+    deselBtn.id = 'btn-desel';
+    deselBtn.textContent = '\u2715 Deselect';
+    deselBtn.onclick = () => {
+      selTower = null;
+      updateTowerPanel();
+      updateUI();
+    };
+    infoDiv.appendChild(deselBtn);
+  } else {
+    cardsDiv.style.display = 'flex';
+    infoDiv.style.display = 'none';
   }
-
-  // Status warnings
-  const msgs = [];
-  if (pc <= MIN[T.PLANT]  * 4) msgs.push('<span class="warn">&#x26A0; Plants critically low</span>');
-  if (rc <= MIN[T.RABBIT] * 4) msgs.push('<span class="warn">&#x26A0; Rabbits critically low</span>');
-  if (wc <= MIN[T.WOLF]   * 3) msgs.push('<span class="warn">&#x26A0; Wolves critically low</span>');
-  if (pc >= MAX_POP[T.PLANT]  * 0.82) msgs.push('<span class="alert">&#x26D4; Plants overgrowing!</span>');
-  if (rc >= MAX_POP[T.RABBIT] * 0.82) msgs.push('<span class="alert">&#x26D4; Rabbits overrunning!</span>');
-  if (wc >= MAX_POP[T.WOLF]   * 0.82) msgs.push('<span class="alert">&#x26D4; Wolves overrunning!</span>');
-  document.getElementById('status-text').innerHTML = msgs.join('<br>');
 }
 
-function setBar(name, count, max, min, ok, warn, danger) {
-  const bar   = document.getElementById('bar-'   + name);
-  const mark  = document.getElementById('min-'   + name);
-  const pct    = Math.min(100, count / max * 100);
-  const minPct = min / max * 100;
-  bar.style.width = pct + '%';
-  mark.style.left = minPct + '%';
-  const lo = count <= min * 2.5;
-  const hi = count >= max * 0.82;
-  bar.style.background = (lo || hi) ? danger :
-    (count <= min * 5 || count >= max * 0.65) ? warn : ok;
-}
-
-// ─────────────────────────────────────────────
-//  GAME LOOP
-// ─────────────────────────────────────────────
-function loop(now) {
-  requestAnimationFrame(loop);
-
-  if (gameState !== 'playing') {
-    render();
-    return;
+function applyUpgrade(tw) {
+  switch (tw.type) {
+    case 'wolf':  tw.damage   *= 2;   break;
+    case 'bear':  tw.range    *= 1.5; break;
+    case 'eagle': tw.pierceCnt = 5;   break;
+    case 'skunk': tw.slowDur   = 120; break;
+    case 'fox':   tw.multiCnt  = 5;   break;
   }
-
-  // Spirit energy regen
-  if (now - lastRegen >= REGEN_MS) {
-    spirit = Math.min(MAX_ENERGY, spirit + 1);
-    lastRegen = now;
-  }
-
-  // Simulation tick
-  if (now - lastTick >= TICK_MS) {
-    step();
-    lastTick = now;
-
-    const reason = loseReason();
-    if (reason) { endGame(false, reason); return; }
-    if (now - t0 >= WIN_MS) { endGame(true); return; }
-  }
-
-  render();
-  updateUI(now);
 }
 
-function loseReason() {
-  if (pops[T.PLANT]  === 0)                  return 'All plants died out.';
-  if (pops[T.RABBIT] === 0)                  return 'All rabbits died out.';
-  if (pops[T.WOLF]   === 0)                  return 'All wolves died out.';
-  if (pops[T.PLANT]  > MAX_POP[T.PLANT])     return 'Plants smothered the land.';
-  if (pops[T.RABBIT] > MAX_POP[T.RABBIT])    return 'Rabbits overran the ecosystem.';
-  if (pops[T.WOLF]   > MAX_POP[T.WOLF])      return 'Wolves hunted everything to ruin.';
-  return null;
-}
+// ── INPUT ─────────────────────────────────────────────────────────────────────
 
-// ─────────────────────────────────────────────
-//  START / END
-// ─────────────────────────────────────────────
-function startGame() {
-  initGrid();
-  spawnInitial();
-  countPops();
-  spirit    = MAX_ENERGY;
-  gameState = 'playing';
-  const now = performance.now();
-  t0        = now;
-  lastTick  = now;
-  lastRegen = now;
-  document.getElementById('overlay').style.display = 'none';
-  document.getElementById('wave-num').textContent  = '0';
-  document.getElementById('wave-next').textContent = '\u2014';
-}
-
-function endGame(won, reason) {
-  gameState = won ? 'won' : 'lost';
-  const ov    = document.getElementById('overlay');
-  const title = document.getElementById('ov-title');
-  const msg   = document.getElementById('overlay-msg');
-  const btn   = document.getElementById('overlay-btn');
-
-  ov.style.display = 'flex';
-  title.textContent = won ? 'BALANCE RESTORED' : 'BALANCE LOST';
-  title.style.color = won ? '#55cc55' : '#ff5555';
-
-  msg.innerHTML = won
-    ? `You survived all ${waveNumber} waves and kept the ecosystem balanced for 3 minutes.<br>The spirits of the wild are at peace.`
-    : `<b style="color:#ff7777">${reason}</b><br>The ecosystem collapsed after wave ${waveNumber}.<br>Try again to restore balance.`;
-
-  btn.textContent = 'TRY AGAIN';
-}
-
-// ─────────────────────────────────────────────
-//  INPUT
-// ─────────────────────────────────────────────
 function canvasCoords(e) {
-  const rect   = canvas.getBoundingClientRect();
-  const scaleX = W / rect.width;
-  const scaleY = H / rect.height;
-  return {
-    c: Math.floor((e.clientX - rect.left) * scaleX / CELL),
-    r: Math.floor((e.clientY - rect.top)  * scaleY / CELL),
-  };
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  return { r: Math.floor(y / CELL), c: Math.floor(x / CELL) };
 }
 
-function summon(r, c) {
+canvas.addEventListener('click', e => {
+  if (gameState === 'lost' || gameState === 'won') return;
+  const { r, c } = canvasCoords(e);
   if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return;
-  const cost = COST[selTool];
-  if (spirit < cost) return;
 
-  const type = selTool === 'plant' ? T.PLANT :
-               selTool === 'rabbit' ? T.RABBIT : T.WOLF;
-
-  if (type === T.PLANT  &&  grid[r][c]) return;
-  if (type !== T.PLANT  &&  grid[r][c] && grid[r][c].type !== T.PLANT) return;
-
-  spirit -= cost;
-  grid[r][c] = type === T.PLANT  ? mkPlant()  :
-               type === T.RABBIT ? mkRabbit() : mkWolf();
-  countPops();
-}
-
-function removeEntity(r, c) {
-  if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return;
-  const e = grid[r][c];
-  if (!e) return;
-  if (e.type === T.WOLF) spirit = Math.min(MAX_ENERGY, spirit + 1);
-  grid[r][c] = null;
-  countPops();
-}
-
-let dragging = false;
-const paintedThisDrag = new Set();
-
-canvas.addEventListener('mousedown', e => {
-  e.preventDefault();
-  if (gameState !== 'playing') return;
-  if (e.button === 2) {
-    const { r, c } = canvasCoords(e);
-    removeEntity(r, c);
+  if (grid[r][c]) {
+    selTower = { r, c };
+    updateTowerPanel();
+    updateUI();
     return;
   }
-  dragging = true;
-  paintedThisDrag.clear();
+
+  if (PATH_CELLS.has(r * COLS + c)) return;
+  selTower = null;
+
+  const def = TOWER_DEFS[selTool];
+  if (money < def.cost) return;
+
+  money -= def.cost;
+  grid[r][c] = {
+    type: selTool,
+    level: 1,
+    cd: 0,
+    damage: def.damage,
+    range: def.range,
+    cooldown: def.cooldown,
+    pierceCnt: 3,
+    multiCnt: 3,
+    slowDur: 60,
+    attackType: def.attackType,
+    totalCost: def.cost
+  };
+
+  updateTowerPanel();
+  updateUI();
+});
+
+canvas.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  if (gameState === 'lost' || gameState === 'won') return;
   const { r, c } = canvasCoords(e);
-  paintedThisDrag.add(r * COLS + c);
-  summon(r, c);
+  if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return;
+  const tw = grid[r][c];
+  if (!tw) return;
+  money += Math.floor(tw.totalCost * 0.7);
+  grid[r][c] = null;
+  if (selTower && selTower.r === r && selTower.c === c) {
+    selTower = null;
+    updateTowerPanel();
+  }
+  updateUI();
 });
 
 canvas.addEventListener('mousemove', e => {
   const { r, c } = canvasCoords(e);
-  hoverCell = (r >= 0 && r < ROWS && c >= 0 && c < COLS) ? { r, c } : null;
-
-  if (!dragging || gameState !== 'playing' || selTool !== 'plant') return;
-  const key = r * COLS + c;
-  if (paintedThisDrag.has(key)) return;
-  paintedThisDrag.add(key);
-  summon(r, c);
+  if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
+    hoverCell = { r, c };
+  } else {
+    hoverCell = null;
+  }
 });
 
-canvas.addEventListener('mouseup',    () => { dragging = false; paintedThisDrag.clear(); });
-canvas.addEventListener('mouseleave', () => { dragging = false; hoverCell = null; });
-canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('mouseleave', () => { hoverCell = null; });
 
 document.addEventListener('keydown', e => {
-  if (e.key === '1') setTool('plant');
-  if (e.key === '2') setTool('rabbit');
-  if (e.key === '3') setTool('wolf');
+  const keyMap = { '1': 'wolf', '2': 'bear', '3': 'eagle', '4': 'skunk', '5': 'fox' };
+  if (keyMap[e.key]) {
+    setTool(keyMap[e.key]);
+  }
 });
 
-function setTool(t) {
-  selTool = t;
-  ['plant', 'rabbit', 'wolf'].forEach(name =>
-    document.getElementById('btn-' + name).classList.toggle('active', name === t)
-  );
-}
+document.getElementById('start-btn').addEventListener('click', startWave);
 
-document.getElementById('overlay-btn').addEventListener('click', startGame);
+document.getElementById('replay-btn').addEventListener('click', () => {
+  document.getElementById('overlay').classList.remove('show');
+  initState();
+  buildTowerCards();
+  updateTowerPanel();
+  updateStartBtn();
+  updateUI();
+});
 
-// ─────────────────────────────────────────────
-//  UTILS
-// ─────────────────────────────────────────────
-function shuffle(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+// ── GAME LOOP ─────────────────────────────────────────────────────────────────
+
+let lastTime = 0;
+let accumulator = 0;
+
+function loop(timestamp) {
+  requestAnimationFrame(loop);
+  const dt = Math.min(timestamp - lastTime, 200);
+  lastTime = timestamp;
+
+  if (gameState !== 'lost' && gameState !== 'won') {
+    accumulator += dt;
+    while (accumulator >= TICK_MS) {
+      accumulator -= TICK_MS;
+      step();
+      if (gameState === 'lost' || gameState === 'won') break;
+    }
+    updateUI();
+    updateStartBtn();
   }
-  return arr;
+
+  render();
 }
 
-function rnd(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+// ── INIT ──────────────────────────────────────────────────────────────────────
 
-// ─────────────────────────────────────────────
-//  BOOT
-// ─────────────────────────────────────────────
-initGrid();
-countPops();
+initState();
+buildTowerCards();
+updateTowerPanel();
+updateStartBtn();
+updateUI();
 requestAnimationFrame(loop);
 </script>
 </body>
