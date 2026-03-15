@@ -190,6 +190,7 @@ canvas {
 }
 
 .tool-cost { margin-left: auto; color: #55aa55; font-size: 0.68rem; }
+.tool-range { font-size: 0.62rem; color: #6868aa; margin-left: 4px; }
 
 /* ---- Spirit energy ---- */
 .energy-row {
@@ -266,9 +267,10 @@ canvas {
       <h2 id="ov-title">NATURE SPIRIT</h2>
       <p id="overlay-msg">
         You are the spirit of the wild.<br>
-        Balance the food chain: <b>plants</b> feed <b>rabbits</b>, rabbits feed <b>wolves</b>.<br><br>
-        Keep all three species alive for <b>3 minutes</b>.<br>
-        If any species goes extinct or overruns the land — you fail.
+        <b>Wolves</b> (towers) defend against <b>rabbit</b> waves.<br>
+        <b>Plants</b> feed rabbits — keep them in balance.<br><br>
+        Survive <b>3 minutes</b> without any species dying out<br>
+        or overrunning the land.
       </p>
       <button id="overlay-btn">BEGIN</button>
     </div>
@@ -331,6 +333,7 @@ canvas {
         <div class="swatch" style="background:#6a6aaa"></div>
         [3] Wolf
         <span class="tool-cost">3&#x2736;</span>
+        <span class="tool-range">Range:&nbsp;2</span>
       </button>
     </div>
 
@@ -345,6 +348,9 @@ canvas {
     <div class="panel">
       <div id="timer">3:00</div>
       <div id="win-bar-bg"><div id="win-bar"></div></div>
+      <div id="wave-info" style="font-size:0.7rem; color:#60a060; text-align:center; margin-top:4px">
+        Wave <span id="wave-num">0</span> &bull; Next in <span id="wave-next">&#x2014;</span>
+      </div>
       <div id="status-text"></div>
     </div>
 
@@ -352,7 +358,9 @@ canvas {
     <div class="panel" id="help">
       <b>Drag</b> to paint plants<br>
       <b>Click</b> to place animals<br>
-      <b>Keys:</b> 1 / 2 / 3 to switch tool<br><br>
+      <b>Right-click</b> to remove<br>
+      <b>Keys:</b> 1 / 2 / 3 to switch tool<br>
+      <b>Range shown on hover</b><br><br>
       <b>Lose if:</b> any species hits 0<br>or exceeds its max limit
     </div>
 
@@ -364,22 +372,42 @@ canvas {
 //  CONSTANTS
 // ─────────────────────────────────────────────
 const COLS = 40, ROWS = 30, CELL = 20;
-const W = COLS * CELL, H = ROWS * CELL;          // 800 × 600
-const TICK_MS  = 200;                             // simulation speed (5 ticks/sec)
-const WIN_MS   = 180_000;                         // 3-minute survival goal
-const REGEN_MS = 4_000;                           // spirit energy recharge
+const W = COLS * CELL, H = ROWS * CELL;        // 800 × 600
+const TICK_MS   = 200;                          // 5 ticks/sec
+const WIN_MS    = 180_000;                      // 3 minutes
+const REGEN_MS  = 4_000;                        // spirit energy recharge
 const MAX_ENERGY = 12;
 
 const T = { EMPTY: 0, PLANT: 1, RABBIT: 2, WOLF: 3 };
 
-// Lose thresholds
+// Population limits
 const MIN = { [T.PLANT]: 6, [T.RABBIT]: 3, [T.WOLF]: 2 };
-const MAX = { [T.PLANT]: 480, [T.RABBIT]: 230, [T.WOLF]: 85 };
+const MAX_POP = { [T.PLANT]: 480, [T.RABBIT]: 230, [T.WOLF]: 85 };
 
-// Entity parameters
-const R_INIT = 26, R_MAX = 42, R_GAIN = 11, R_REPR = 35, R_REPR_P = 0.30, R_MAXAGE = 480;
-const W_INIT = 32, W_MAX = 62, W_GAIN = 22, W_REPR = 52, W_REPR_P = 0.22, W_MAXAGE = 700;
-const PLANT_SPREAD = 0.05;
+// Rabbit parameters
+const R_INIT    = 26;
+const R_MAX_E   = 42;
+const R_GAIN    = 11;
+const R_REPR    = 35;
+const R_REPR_P  = 0.25;
+const R_MAXAGE  = 480;
+const R_VISION  = 5;
+
+// Wolf parameters
+const W_INIT    = 32;
+const W_MAX_E   = 62;
+const W_GAIN    = 22;
+const W_REPR    = 52;
+const W_REPR_P  = 0.22;
+const W_MAXAGE  = 700;
+const WOLF_RANGE = 2;
+const W_DRIFT_RANGE = 4;
+
+// Plant parameters
+const PLANT_SPREAD = 0.04;
+
+// Wave parameters
+const WAVE_INTERVAL_TICKS = 150; // every 30 ticks = 30 * 200ms = 6 seconds... spec says 30 ticks
 
 const COST = { plant: 1, rabbit: 2, wolf: 3 };
 
@@ -391,21 +419,24 @@ const ctx    = canvas.getContext('2d');
 canvas.width  = W;
 canvas.height = H;
 
-// Off-screen buffer for performance
-const buf    = document.createElement('canvas');
+const buf  = document.createElement('canvas');
 buf.width = W; buf.height = H;
-const bctx   = buf.getContext('2d');
+const bctx = buf.getContext('2d');
 
 // ─────────────────────────────────────────────
 //  STATE
 // ─────────────────────────────────────────────
-let grid  = [];           // grid[r][c] = null | {type, energy, age}
-let pops  = {};           // population counts
+let grid      = [];
+let terrain   = [];
+let pops      = {};
 let spirit    = MAX_ENERGY;
 let selTool   = 'plant';
-let gameState = 'idle';   // idle | playing | won | lost
+let gameState = 'idle';
 let t0 = 0, lastTick = 0, lastRegen = 0;
-let hoverCell = null;     // {r,c} for cursor highlight
+let hoverCell = null;
+let tickCount = 0;
+let waveNumber = 0;
+let ticksSinceWave = 0;
 
 // ─────────────────────────────────────────────
 //  FACTORIES
@@ -415,38 +446,57 @@ const mkRabbit = () => ({ type: T.RABBIT, energy: R_INIT,  age: 0 });
 const mkWolf   = () => ({ type: T.WOLF,   energy: W_INIT,  age: 0 });
 
 // ─────────────────────────────────────────────
-//  GRID HELPERS
+//  GRID / TERRAIN HELPERS
 // ─────────────────────────────────────────────
 function initGrid() {
   grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+  terrain = Array.from({ length: ROWS }, () =>
+    Array.from({ length: COLS }, () => Math.floor(Math.random() * 21) - 10)
+  );
+  tickCount = 0;
+  waveNumber = 0;
+  ticksSinceWave = 0;
 }
 
 function spawnInitial() {
   const idxs = shuffle(Array.from({ length: ROWS * COLS }, (_, i) => i));
   let i = 0;
-  for (let n = 0; n < 115; n++) place(idxs[i++], mkPlant());
-  for (let n = 0; n < 26;  n++) place(idxs[i++], mkRabbit());
-  for (let n = 0; n < 7;   n++) place(idxs[i++], mkWolf());
+  for (let n = 0; n < 115; n++) placeIdx(idxs[i++], mkPlant());
+  for (let n = 0; n < 26;  n++) placeIdx(idxs[i++], mkRabbit());
+  for (let n = 0; n < 7;   n++) placeIdx(idxs[i++], mkWolf());
 }
 
-function place(idx, entity) {
+function placeIdx(idx, entity) {
   grid[Math.floor(idx / COLS)][idx % COLS] = entity;
 }
 
-function adjCells(r, c) {
+function adjCells8(r, c) {
   const a = [];
-  if (r > 0)        a.push([r-1, c]);
-  if (r < ROWS-1)   a.push([r+1, c]);
-  if (c > 0)        a.push([r, c-1]);
-  if (c < COLS-1)   a.push([r, c+1]);
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) {
+      if (dr === 0 && dc === 0) continue;
+      const nr = r + dr, nc = c + dc;
+      if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) a.push([nr, nc]);
+    }
+  }
   return a;
 }
 
-function adjOfType(r, c, type) {
-  return adjCells(r, c).filter(([nr, nc]) => {
-    const cell = grid[nr][nc];
-    return type === T.EMPTY ? !cell : (cell && cell.type === type);
-  });
+function adjCells4(r, c) {
+  const a = [];
+  if (r > 0)      a.push([r-1, c]);
+  if (r < ROWS-1) a.push([r+1, c]);
+  if (c > 0)      a.push([r, c-1]);
+  if (c < COLS-1) a.push([r, c+1]);
+  return a;
+}
+
+function emptyAdj8(r, c) {
+  return adjCells8(r, c).filter(([nr, nc]) => !grid[nr][nc]);
+}
+
+function emptyAdj4(r, c) {
+  return adjCells4(r, c).filter(([nr, nc]) => !grid[nr][nc]);
 }
 
 function countPops() {
@@ -456,10 +506,80 @@ function countPops() {
       if (grid[r][c]) pops[grid[r][c].type]++;
 }
 
+// Find nearest entity of given type within Chebyshev range
+function findInRange(r, c, type, range) {
+  let best = null, bestDist = Infinity;
+  const r0 = Math.max(0, r - range), r1 = Math.min(ROWS - 1, r + range);
+  const c0 = Math.max(0, c - range), c1 = Math.min(COLS - 1, c + range);
+  for (let nr = r0; nr <= r1; nr++) {
+    for (let nc = c0; nc <= c1; nc++) {
+      if (nr === r && nc === c) continue;
+      const e = grid[nr][nc];
+      if (e && e.type === type) {
+        const d = Math.max(Math.abs(nr - r), Math.abs(nc - c));
+        if (d < bestDist) { bestDist = d; best = [nr, nc]; }
+      }
+    }
+  }
+  return best;
+}
+
+// Find nearest plant within Manhattan distance vision
+function findNearestPlant(r, c, vision) {
+  let best = null, bestDist = Infinity;
+  const r0 = Math.max(0, r - vision), r1 = Math.min(ROWS - 1, r + vision);
+  const c0 = Math.max(0, c - vision), c1 = Math.min(COLS - 1, c + vision);
+  for (let nr = r0; nr <= r1; nr++) {
+    for (let nc = c0; nc <= c1; nc++) {
+      if (nr === r && nc === c) continue;
+      const e = grid[nr][nc];
+      if (e && e.type === T.PLANT) {
+        const d = Math.abs(nr - r) + Math.abs(nc - c);
+        if (d < bestDist) { bestDist = d; best = [nr, nc]; }
+      }
+    }
+  }
+  return best;
+}
+
+function sign(x) { return x > 0 ? 1 : x < 0 ? -1 : 0; }
+
+// ─────────────────────────────────────────────
+//  WAVE SPAWNING
+// ─────────────────────────────────────────────
+function spawnWave() {
+  const size = Math.min(3 + Math.floor(waveNumber * 0.6), 10);
+  waveNumber++;
+
+  // Collect edge cells (left col, top row, bottom row)
+  const edgeCells = [];
+  for (let r = 0; r < ROWS; r++) {
+    if (!grid[r][0]) edgeCells.push([r, 0]);
+  }
+  for (let c = 1; c < COLS; c++) {
+    if (!grid[0][c]) edgeCells.push([0, c]);
+    if (!grid[ROWS-1][c]) edgeCells.push([ROWS-1, c]);
+  }
+  shuffle(edgeCells);
+  const toSpawn = Math.min(size, edgeCells.length);
+  for (let i = 0; i < toSpawn; i++) {
+    const [r, c] = edgeCells[i];
+    if (!grid[r][c]) grid[r][c] = mkRabbit();
+  }
+}
+
 // ─────────────────────────────────────────────
 //  SIMULATION STEP
 // ─────────────────────────────────────────────
 function step() {
+  tickCount++;
+  ticksSinceWave++;
+
+  if (ticksSinceWave >= 30) {
+    spawnWave();
+    ticksSinceWave = 0;
+  }
+
   const plants = [], rabbits = [], wolves = [];
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
@@ -475,66 +595,142 @@ function step() {
   shuffle(rabbits);
   shuffle(plants);
 
-  // --- Wolves ---
+  // --- Wolves (towers): stationary, attack range, drift if hungry ---
   for (const [r, c, wolf] of wolves) {
     if (grid[r][c] !== wolf) continue;
 
     wolf.energy--;
     wolf.age++;
 
-    if (wolf.energy <= 0 || wolf.age > W_MAXAGE) { grid[r][c] = null; continue; }
+    if (wolf.energy <= 0 || wolf.age > W_MAXAGE) {
+      grid[r][c] = null;
+      continue;
+    }
 
-    const prey = adjOfType(r, c, T.RABBIT);
-    if (prey.length > 0) {
-      const [nr, nc] = rnd(prey);
-      if (grid[nr][nc] && grid[nr][nc].type === T.RABBIT) {
-        wolf.energy = Math.min(wolf.energy + W_GAIN, W_MAX);
-        const spawn = wolf.energy >= W_REPR && Math.random() < W_REPR_P;
-        grid[r][c] = spawn ? mkWolf() : null;
-        grid[nr][nc] = wolf;
+    // Find nearest rabbit in attack range (Chebyshev 2)
+    const preyPos = findInRange(r, c, T.RABBIT, WOLF_RANGE);
+    if (preyPos) {
+      const [pr, pc] = preyPos;
+      if (grid[pr][pc] && grid[pr][pc].type === T.RABBIT) {
+        // Kill rabbit, gain energy
+        grid[pr][pc] = null;
+        wolf.energy = Math.min(wolf.energy + W_GAIN, W_MAX_E);
+
+        // Reproduction
+        if (wolf.energy >= W_REPR && Math.random() < W_REPR_P) {
+          const empty = emptyAdj8(r, c);
+          if (empty.length > 0) {
+            const [nr, nc] = rnd(empty);
+            if (!grid[nr][nc]) {
+              grid[nr][nc] = mkWolf();
+              wolf.energy -= 15;
+            }
+          }
+        }
       }
     } else {
-      const empty = adjOfType(r, c, T.EMPTY);
-      if (empty.length > 0) {
-        const [nr, nc] = rnd(empty);
-        if (!grid[nr][nc]) { grid[nr][nc] = wolf; grid[r][c] = null; }
+      // No prey in attack range: drift toward nearest rabbit within 4 cells
+      const driftTarget = findInRange(r, c, T.RABBIT, W_DRIFT_RANGE);
+      if (driftTarget) {
+        const [tr, tc] = driftTarget;
+        const dr = sign(tr - r);
+        const dc = sign(tc - c);
+        // Try diagonal first, then cardinal steps
+        const candidates = [];
+        if (dr !== 0 && dc !== 0) candidates.push([r + dr, c + dc]);
+        if (dr !== 0) candidates.push([r + dr, c]);
+        if (dc !== 0) candidates.push([r, c + dc]);
+        for (const [nr, nc] of candidates) {
+          if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && !grid[nr][nc]) {
+            grid[nr][nc] = wolf;
+            grid[r][c] = null;
+            break;
+          }
+        }
       }
     }
   }
 
-  // --- Rabbits ---
+  // --- Rabbits: seek nearest plant, move toward it, eat it ---
   for (const [r, c, rabbit] of rabbits) {
     if (grid[r][c] !== rabbit) continue;
 
     rabbit.energy--;
     rabbit.age++;
 
-    if (rabbit.energy <= 0 || rabbit.age > R_MAXAGE) { grid[r][c] = null; continue; }
+    if (rabbit.energy <= 0 || rabbit.age > R_MAXAGE) {
+      grid[r][c] = null;
+      continue;
+    }
 
-    const food = adjOfType(r, c, T.PLANT);
-    if (food.length > 0) {
-      const [nr, nc] = rnd(food);
-      if (grid[nr][nc] && grid[nr][nc].type === T.PLANT) {
-        rabbit.energy = Math.min(rabbit.energy + R_GAIN, R_MAX);
-        const spawn = rabbit.energy >= R_REPR && Math.random() < R_REPR_P;
-        grid[r][c] = spawn ? mkRabbit() : null;
-        grid[nr][nc] = rabbit;
+    const plantPos = findNearestPlant(r, c, R_VISION);
+    let moved = false;
+
+    if (plantPos) {
+      const [tr, tc] = plantPos;
+      // If on same cell (shouldn't be but guard), eat
+      if (tr === r && tc === c) {
+        // already there - shouldn't happen
+      } else {
+        const dr = sign(tr - r);
+        const dc = sign(tc - c);
+        // Try [r+dr, c+dc], [r+dr, c], [r, c+dc]
+        const steps = [];
+        if (dr !== 0 && dc !== 0) steps.push([r + dr, c + dc]);
+        if (dr !== 0) steps.push([r + dr, c]);
+        if (dc !== 0) steps.push([r, c + dc]);
+
+        for (const [nr, nc] of steps) {
+          if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) continue;
+          const cell = grid[nr][nc];
+          if (!cell) {
+            // Move to empty
+            grid[nr][nc] = rabbit;
+            grid[r][c] = null;
+            moved = true;
+            break;
+          } else if (cell.type === T.PLANT) {
+            // Eat plant
+            rabbit.energy = Math.min(rabbit.energy + R_GAIN, R_MAX_E);
+            grid[r][c] = null;
+            grid[nr][nc] = rabbit;
+            moved = true;
+            // Reproduction after eating
+            if (rabbit.energy >= R_REPR && Math.random() < R_REPR_P) {
+              const empty = emptyAdj8(nr, nc);
+              if (empty.length > 0) {
+                const [br, bc] = rnd(empty);
+                if (!grid[br][bc]) {
+                  grid[br][bc] = mkRabbit();
+                  rabbit.energy -= 12;
+                }
+              }
+            }
+            break;
+          }
+        }
       }
-    } else {
-      const empty = adjOfType(r, c, T.EMPTY);
+    }
+
+    if (!moved) {
+      // Random walk to adjacent empty cell
+      const empty = emptyAdj4(r, c);
       if (empty.length > 0) {
         const [nr, nc] = rnd(empty);
-        if (!grid[nr][nc]) { grid[nr][nc] = rabbit; grid[r][c] = null; }
+        if (!grid[nr][nc]) {
+          grid[nr][nc] = rabbit;
+          grid[r][c] = null;
+        }
       }
     }
   }
 
-  // --- Plants (spread) ---
+  // --- Plants: spread ---
   for (const [r, c, plant] of plants) {
     if (grid[r][c] !== plant) continue;
     plant.age++;
     if (Math.random() < PLANT_SPREAD) {
-      const empty = adjOfType(r, c, T.EMPTY);
+      const empty = emptyAdj4(r, c);
       if (empty.length > 0) {
         const [nr, nc] = rnd(empty);
         if (!grid[nr][nc]) grid[nr][nc] = mkPlant();
@@ -546,57 +742,278 @@ function step() {
 }
 
 // ─────────────────────────────────────────────
+//  SPRITE DRAWING
+// ─────────────────────────────────────────────
+function drawPlant(cx, r, c, vit) {
+  const x = c * CELL, y = r * CELL;
+  cx.save();
+  cx.translate(x, y);
+
+  // Stem
+  cx.fillStyle = '#5a3020';
+  cx.fillRect(9, 13, 2, 7);
+
+  // Left leaf
+  cx.fillStyle = vit > 0.6 ? '#44cc44' : '#2a8a2a';
+  cx.beginPath();
+  cx.ellipse(5, 11, 5, 2.5, -0.4, 0, Math.PI * 2);
+  cx.fill();
+
+  // Right leaf
+  cx.beginPath();
+  cx.ellipse(15, 8, 5, 2.5, 0.4, 0, Math.PI * 2);
+  cx.fill();
+
+  // Bud
+  cx.fillStyle = vit > 0.8 ? '#88ee88' : vit > 0.4 ? '#55cc55' : '#2a8c2a';
+  cx.beginPath();
+  cx.arc(10, 5, 4, 0, Math.PI * 2);
+  cx.fill();
+
+  // Bud highlight
+  cx.fillStyle = 'rgba(255,255,255,0.2)';
+  cx.beginPath();
+  cx.arc(8, 4, 1.5, 0, Math.PI * 2);
+  cx.fill();
+
+  cx.restore();
+}
+
+function drawRabbit(cx, r, c, vit) {
+  const x = c * CELL, y = r * CELL;
+  const bodyColor = vit > 0.5 ? '#d4a840' : vit > 0.25 ? '#a88030' : '#785020';
+  cx.save();
+  cx.translate(x, y);
+
+  // Left ear
+  cx.fillStyle = bodyColor;
+  cx.fillRect(4, 0, 4, 10);
+  // Left inner ear
+  cx.fillStyle = '#e8a0a0';
+  cx.fillRect(5, 1, 2, 8);
+
+  // Right ear
+  cx.fillStyle = bodyColor;
+  cx.fillRect(12, 0, 4, 10);
+  // Right inner ear
+  cx.fillStyle = '#e8a0a0';
+  cx.fillRect(13, 1, 2, 8);
+
+  // Head
+  cx.fillStyle = bodyColor;
+  cx.beginPath();
+  cx.arc(10, 11, 5, 0, Math.PI * 2);
+  cx.fill();
+
+  // Body
+  cx.fillStyle = bodyColor;
+  cx.beginPath();
+  cx.ellipse(10, 17, 6, 4, 0, 0, Math.PI * 2);
+  cx.fill();
+
+  // Eyes
+  cx.fillStyle = '#1a0a00';
+  cx.fillRect(7, 9, 2, 2);
+  cx.fillRect(11, 9, 2, 2);
+
+  // Eye shine
+  cx.fillStyle = '#ffffff';
+  cx.fillRect(8, 9, 1, 1);
+  cx.fillRect(12, 9, 1, 1);
+
+  // Nose
+  cx.fillStyle = '#cc7070';
+  cx.beginPath();
+  cx.arc(10, 12.5, 1.5, 0, Math.PI * 2);
+  cx.fill();
+
+  // Tail
+  cx.fillStyle = '#f0e8d0';
+  cx.beginPath();
+  cx.arc(17, 16, 2.5, 0, Math.PI * 2);
+  cx.fill();
+
+  cx.restore();
+}
+
+function drawWolf(cx, r, c, vit) {
+  const x = c * CELL, y = r * CELL;
+  const bodyColor = vit > 0.5 ? '#7878b8' : vit > 0.25 ? '#5858a0' : '#383880';
+  cx.save();
+  cx.translate(x, y);
+
+  // Left ear triangle
+  cx.fillStyle = bodyColor;
+  cx.beginPath();
+  cx.moveTo(2, 8);
+  cx.lineTo(5, 0);
+  cx.lineTo(9, 7);
+  cx.closePath();
+  cx.fill();
+
+  // Left inner ear
+  cx.fillStyle = '#cc9090';
+  cx.beginPath();
+  cx.moveTo(4, 7);
+  cx.lineTo(5, 2);
+  cx.lineTo(8, 7);
+  cx.closePath();
+  cx.fill();
+
+  // Right ear triangle
+  cx.fillStyle = bodyColor;
+  cx.beginPath();
+  cx.moveTo(11, 7);
+  cx.lineTo(15, 0);
+  cx.lineTo(18, 8);
+  cx.closePath();
+  cx.fill();
+
+  // Right inner ear
+  cx.fillStyle = '#cc9090';
+  cx.beginPath();
+  cx.moveTo(12, 7);
+  cx.lineTo(15, 2);
+  cx.lineTo(16, 7);
+  cx.closePath();
+  cx.fill();
+
+  // Head
+  cx.fillStyle = bodyColor;
+  cx.beginPath();
+  cx.arc(10, 10, 6, 0, Math.PI * 2);
+  cx.fill();
+
+  // Body
+  cx.fillStyle = bodyColor;
+  cx.beginPath();
+  cx.ellipse(10, 17, 7, 4, 0, 0, Math.PI * 2);
+  cx.fill();
+
+  // Snout
+  cx.fillStyle = '#b0b0c8';
+  cx.beginPath();
+  cx.ellipse(10, 13, 3.5, 2.5, 0, 0, Math.PI * 2);
+  cx.fill();
+
+  // Eye glow
+  if (vit > 0.3) {
+    cx.fillStyle = 'rgba(255,200,0,0.25)';
+    cx.beginPath();
+    cx.arc(7.5, 9.5, 4, 0, Math.PI * 2);
+    cx.fill();
+    cx.beginPath();
+    cx.arc(12.5, 9.5, 4, 0, Math.PI * 2);
+    cx.fill();
+  }
+
+  // Left eye
+  cx.fillStyle = '#ffcc00';
+  cx.fillRect(6, 8, 3, 3);
+
+  // Right eye
+  cx.fillStyle = '#ffcc00';
+  cx.fillRect(11, 8, 3, 3);
+
+  // Nose
+  cx.fillStyle = '#1a1a2a';
+  cx.beginPath();
+  cx.arc(10, 11.5, 1.5, 0, Math.PI * 2);
+  cx.fill();
+
+  cx.restore();
+}
+
+// ─────────────────────────────────────────────
 //  RENDERING
 // ─────────────────────────────────────────────
-// Base colors: [bg, mid, highlight]
-const PALETTE = {
-  [T.PLANT]:  ['#194d19', '#2e8c2e', '#4dbb4d'],
-  [T.RABBIT]: ['#7a5010', '#b88030', '#dda050'],
-  [T.WOLF]:   ['#2a2a55', '#5050a0', '#8888cc'],
-};
-
-function render(now) {
-  bctx.fillStyle = '#0a160a';
-  bctx.fillRect(0, 0, W, H);
-
+function render() {
+  // Draw terrain for all cells
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
-      const x = c * CELL, y = r * CELL;
-      const e = grid[r][c];
-
-      if (!e) {
-        bctx.fillStyle = '#0d1a0d';
-        bctx.fillRect(x, y, CELL - 1, CELL - 1);
-        continue;
-      }
-
-      const pal = PALETTE[e.type];
-      const maxE = e.type === T.WOLF ? W_MAX : e.type === T.RABBIT ? R_MAX : 10;
-      const vit  = Math.max(0, Math.min(1, e.energy / maxE));
-
-      bctx.fillStyle = pal[0];
-      bctx.fillRect(x, y, CELL - 1, CELL - 1);
-
-      // Inner square varies with vitality
-      bctx.fillStyle = vit > 0.55 ? pal[2] : pal[1];
-      const pad = 4;
-      bctx.fillRect(x + pad, y + pad, CELL - 1 - pad * 2, CELL - 1 - pad * 2);
-
-      // Dim overlay for low energy
-      if (vit < 0.25) {
-        bctx.fillStyle = 'rgba(0,0,0,0.45)';
-        bctx.fillRect(x, y, CELL - 1, CELL - 1);
-      }
+      const t = terrain[r][c];
+      const v = 10 + t;
+      bctx.fillStyle = `rgb(${v},${22 + t},${v})`;
+      bctx.fillRect(c * CELL, r * CELL, CELL, CELL);
     }
   }
 
-  // Cursor highlight
+  // Wolf range circles (dim)
+  bctx.save();
+  bctx.strokeStyle = 'rgba(120,120,200,0.12)';
+  bctx.lineWidth = 1;
+  bctx.setLineDash([4, 4]);
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = grid[r][c];
+      if (e && e.type === T.WOLF) {
+        const cx2 = c * CELL + CELL / 2;
+        const cy2 = r * CELL + CELL / 2;
+        const radius = (WOLF_RANGE + 0.5) * CELL;
+        bctx.beginPath();
+        bctx.arc(cx2, cy2, radius, 0, Math.PI * 2);
+        bctx.stroke();
+      }
+    }
+  }
+  bctx.setLineDash([]);
+  bctx.restore();
+
+  // Hover preview for wolf tool
+  if (hoverCell && gameState === 'playing' && selTool === 'wolf') {
+    const { r, c } = hoverCell;
+    const hx = c * CELL + CELL / 2;
+    const hy = r * CELL + CELL / 2;
+    const radius = (WOLF_RANGE + 0.5) * CELL;
+
+    // Highlight cells in range
+    const canAfford = spirit >= COST.wolf;
+    for (let nr = Math.max(0, r - WOLF_RANGE); nr <= Math.min(ROWS-1, r + WOLF_RANGE); nr++) {
+      for (let nc = Math.max(0, c - WOLF_RANGE); nc <= Math.min(COLS-1, c + WOLF_RANGE); nc++) {
+        if (nr === r && nc === c) continue;
+        bctx.fillStyle = 'rgba(100,100,180,0.08)';
+        bctx.fillRect(nc * CELL, nr * CELL, CELL, CELL);
+      }
+    }
+
+    // Brighter range circle
+    bctx.save();
+    bctx.strokeStyle = canAfford ? 'rgba(140,140,220,0.4)' : 'rgba(255,80,80,0.4)';
+    bctx.lineWidth = 1.5;
+    bctx.setLineDash([4, 4]);
+    bctx.beginPath();
+    bctx.arc(hx, hy, radius, 0, Math.PI * 2);
+    bctx.stroke();
+    bctx.setLineDash([]);
+    bctx.restore();
+  }
+
+  // Draw entities
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = grid[r][c];
+      if (!e) continue;
+      const maxE = e.type === T.WOLF ? W_MAX_E : e.type === T.RABBIT ? R_MAX_E : 10;
+      const vit  = Math.max(0, Math.min(1, e.energy / maxE));
+      if (e.type === T.PLANT)  drawPlant(bctx, r, c, vit);
+      if (e.type === T.RABBIT) drawRabbit(bctx, r, c, vit);
+      if (e.type === T.WOLF)   drawWolf(bctx, r, c, vit);
+    }
+  }
+
+  // Hover cursor outline
   if (hoverCell && gameState === 'playing') {
     const { r, c } = hoverCell;
-    bctx.strokeStyle = selTool === 'plant'  ? '#55cc55' :
+    const canAfford = spirit >= COST[selTool];
+    if (!canAfford) {
+      bctx.fillStyle = 'rgba(255,50,50,0.2)';
+      bctx.fillRect(c * CELL, r * CELL, CELL, CELL);
+    }
+    bctx.strokeStyle = !canAfford ? 'rgba(255,80,80,0.8)' :
+                       selTool === 'plant'  ? '#55cc55' :
                        selTool === 'rabbit' ? '#ddaa44' : '#9999dd';
     bctx.lineWidth = 1.5;
-    bctx.strokeRect(c * CELL + 0.75, r * CELL + 0.75, CELL - 2.5, CELL - 2.5);
+    bctx.strokeRect(c * CELL + 0.75, r * CELL + 0.75, CELL - 1.5, CELL - 1.5);
   }
 
   ctx.drawImage(buf, 0, 0);
@@ -614,9 +1031,9 @@ function updateUI(now) {
   document.getElementById('cnt-rabbit').textContent = rc;
   document.getElementById('cnt-wolf').textContent   = wc;
 
-  setBar('plant',  pc, MAX[T.PLANT],  MIN[T.PLANT],  '#3ab03a', '#ffaa00', '#ff4444');
-  setBar('rabbit', rc, MAX[T.RABBIT], MIN[T.RABBIT], '#c09040', '#ffcc44', '#ff4444');
-  setBar('wolf',   wc, MAX[T.WOLF],   MIN[T.WOLF],   '#6868aa', '#aaaaee', '#ff4444');
+  setBar('plant',  pc, MAX_POP[T.PLANT],  MIN[T.PLANT],  '#3ab03a', '#ffaa00', '#ff4444');
+  setBar('rabbit', rc, MAX_POP[T.RABBIT], MIN[T.RABBIT], '#c09040', '#ffcc44', '#ff4444');
+  setBar('wolf',   wc, MAX_POP[T.WOLF],   MIN[T.WOLF],   '#6868aa', '#aaaaee', '#ff4444');
 
   // Energy orbs
   const orbEl = document.getElementById('energy-orbs');
@@ -629,14 +1046,20 @@ function updateUI(now) {
 
   // Timer
   if (gameState === 'playing') {
-    const elapsed  = now - t0;
-    const remain   = Math.max(0, WIN_MS - elapsed);
+    const elapsed = now - t0;
+    const remain  = Math.max(0, WIN_MS - elapsed);
     const m = Math.floor(remain / 60000);
     const s = Math.floor((remain % 60000) / 1000);
     document.getElementById('timer').textContent =
       `${m}:${String(s).padStart(2, '0')}`;
     document.getElementById('win-bar').style.width =
       (elapsed / WIN_MS * 100).toFixed(1) + '%';
+
+    // Wave info
+    const ticksUntilWave = 30 - ticksSinceWave;
+    const secsUntilWave  = Math.ceil(ticksUntilWave * TICK_MS / 1000);
+    document.getElementById('wave-num').textContent  = waveNumber;
+    document.getElementById('wave-next').textContent = secsUntilWave + 's';
   }
 
   // Status warnings
@@ -644,25 +1067,23 @@ function updateUI(now) {
   if (pc <= MIN[T.PLANT]  * 4) msgs.push('<span class="warn">&#x26A0; Plants critically low</span>');
   if (rc <= MIN[T.RABBIT] * 4) msgs.push('<span class="warn">&#x26A0; Rabbits critically low</span>');
   if (wc <= MIN[T.WOLF]   * 3) msgs.push('<span class="warn">&#x26A0; Wolves critically low</span>');
-  if (pc >= MAX[T.PLANT]  * 0.82) msgs.push('<span class="alert">&#x26D4; Plants overgrowing!</span>');
-  if (rc >= MAX[T.RABBIT] * 0.82) msgs.push('<span class="alert">&#x26D4; Rabbits overrunning!</span>');
-  if (wc >= MAX[T.WOLF]   * 0.82) msgs.push('<span class="alert">&#x26D4; Wolves overrunning!</span>');
+  if (pc >= MAX_POP[T.PLANT]  * 0.82) msgs.push('<span class="alert">&#x26D4; Plants overgrowing!</span>');
+  if (rc >= MAX_POP[T.RABBIT] * 0.82) msgs.push('<span class="alert">&#x26D4; Rabbits overrunning!</span>');
+  if (wc >= MAX_POP[T.WOLF]   * 0.82) msgs.push('<span class="alert">&#x26D4; Wolves overrunning!</span>');
   document.getElementById('status-text').innerHTML = msgs.join('<br>');
 }
 
 function setBar(name, count, max, min, ok, warn, danger) {
-  const bar   = document.getElementById('bar-' + name);
-  const track = document.getElementById('track-' + name);
+  const bar   = document.getElementById('bar-'   + name);
   const mark  = document.getElementById('min-'   + name);
-
   const pct    = Math.min(100, count / max * 100);
   const minPct = min / max * 100;
   bar.style.width = pct + '%';
-  mark.style.left  = minPct + '%';
-
+  mark.style.left = minPct + '%';
   const lo = count <= min * 2.5;
   const hi = count >= max * 0.82;
-  bar.style.background = (lo || hi) ? danger : (count <= min * 5 || count >= max * 0.65) ? warn : ok;
+  bar.style.background = (lo || hi) ? danger :
+    (count <= min * 5 || count >= max * 0.65) ? warn : ok;
 }
 
 // ─────────────────────────────────────────────
@@ -671,7 +1092,10 @@ function setBar(name, count, max, min, ok, warn, danger) {
 function loop(now) {
   requestAnimationFrame(loop);
 
-  if (gameState !== 'playing') { render(now); return; }
+  if (gameState !== 'playing') {
+    render();
+    return;
+  }
 
   // Spirit energy regen
   if (now - lastRegen >= REGEN_MS) {
@@ -689,17 +1113,17 @@ function loop(now) {
     if (now - t0 >= WIN_MS) { endGame(true); return; }
   }
 
-  render(now);
+  render();
   updateUI(now);
 }
 
 function loseReason() {
-  if (pops[T.PLANT]  === 0)              return 'All plants died out.';
-  if (pops[T.RABBIT] === 0)              return 'All rabbits died out.';
-  if (pops[T.WOLF]   === 0)              return 'All wolves died out.';
-  if (pops[T.PLANT]  > MAX[T.PLANT])     return 'Plants smothered the land.';
-  if (pops[T.RABBIT] > MAX[T.RABBIT])    return 'Rabbits overran the ecosystem.';
-  if (pops[T.WOLF]   > MAX[T.WOLF])      return 'Wolves hunted everything to ruin.';
+  if (pops[T.PLANT]  === 0)                  return 'All plants died out.';
+  if (pops[T.RABBIT] === 0)                  return 'All rabbits died out.';
+  if (pops[T.WOLF]   === 0)                  return 'All wolves died out.';
+  if (pops[T.PLANT]  > MAX_POP[T.PLANT])     return 'Plants smothered the land.';
+  if (pops[T.RABBIT] > MAX_POP[T.RABBIT])    return 'Rabbits overran the ecosystem.';
+  if (pops[T.WOLF]   > MAX_POP[T.WOLF])      return 'Wolves hunted everything to ruin.';
   return null;
 }
 
@@ -717,6 +1141,8 @@ function startGame() {
   lastTick  = now;
   lastRegen = now;
   document.getElementById('overlay').style.display = 'none';
+  document.getElementById('wave-num').textContent  = '0';
+  document.getElementById('wave-next').textContent = '\u2014';
 }
 
 function endGame(won, reason) {
@@ -731,8 +1157,8 @@ function endGame(won, reason) {
   title.style.color = won ? '#55cc55' : '#ff5555';
 
   msg.innerHTML = won
-    ? 'You maintained all three species for 3 minutes.<br>The spirits of the wild are at peace.'
-    : `<b style="color:#ff7777">${reason}</b><br>The ecosystem collapsed.<br>Try again to restore balance.`;
+    ? `You survived all ${waveNumber} waves and kept the ecosystem balanced for 3 minutes.<br>The spirits of the wild are at peace.`
+    : `<b style="color:#ff7777">${reason}</b><br>The ecosystem collapsed after wave ${waveNumber}.<br>Try again to restore balance.`;
 
   btn.textContent = 'TRY AGAIN';
 }
@@ -755,14 +1181,24 @@ function summon(r, c) {
   const cost = COST[selTool];
   if (spirit < cost) return;
 
-  const type = selTool === 'plant' ? T.PLANT : selTool === 'rabbit' ? T.RABBIT : T.WOLF;
+  const type = selTool === 'plant' ? T.PLANT :
+               selTool === 'rabbit' ? T.RABBIT : T.WOLF;
 
-  // Only place plants on empty; animals on empty or plant cells
-  if (type === T.PLANT  && grid[r][c]) return;
-  if (type !== T.PLANT  && grid[r][c] && grid[r][c].type !== T.PLANT) return;
+  if (type === T.PLANT  &&  grid[r][c]) return;
+  if (type !== T.PLANT  &&  grid[r][c] && grid[r][c].type !== T.PLANT) return;
 
   spirit -= cost;
-  grid[r][c] = type === T.PLANT ? mkPlant() : type === T.RABBIT ? mkRabbit() : mkWolf();
+  grid[r][c] = type === T.PLANT  ? mkPlant()  :
+               type === T.RABBIT ? mkRabbit() : mkWolf();
+  countPops();
+}
+
+function removeEntity(r, c) {
+  if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return;
+  const e = grid[r][c];
+  if (!e) return;
+  if (e.type === T.WOLF) spirit = Math.min(MAX_ENERGY, spirit + 1);
+  grid[r][c] = null;
   countPops();
 }
 
@@ -770,7 +1206,13 @@ let dragging = false;
 const paintedThisDrag = new Set();
 
 canvas.addEventListener('mousedown', e => {
+  e.preventDefault();
   if (gameState !== 'playing') return;
+  if (e.button === 2) {
+    const { r, c } = canvasCoords(e);
+    removeEntity(r, c);
+    return;
+  }
   dragging = true;
   paintedThisDrag.clear();
   const { r, c } = canvasCoords(e);
@@ -791,6 +1233,7 @@ canvas.addEventListener('mousemove', e => {
 
 canvas.addEventListener('mouseup',    () => { dragging = false; paintedThisDrag.clear(); });
 canvas.addEventListener('mouseleave', () => { dragging = false; hoverCell = null; });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 document.addEventListener('keydown', e => {
   if (e.key === '1') setTool('plant');
