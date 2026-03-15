@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terraform</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a1a;
+    color: #e0e0e0;
+    font-family: 'Courier New', monospace;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: #0d0d22;
+    border-bottom: 1px solid #1a1a3a;
+    flex-shrink: 0;
+  }
+
+  #title {
+    font-size: 20px;
+    font-weight: bold;
+    color: #4af;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  #energy-bar-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  #energy-label { font-size: 12px; color: #888; }
+
+  #energy-bar {
+    width: 200px;
+    height: 12px;
+    background: #111;
+    border: 1px solid #333;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  #energy-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #f90, #ff0);
+    border-radius: 6px;
+    transition: width 0.3s;
+  }
+
+  #energy-text { font-size: 12px; color: #ff0; min-width: 60px; }
+
+  #age-display { font-size: 12px; color: #888; }
+
+  #main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  #canvas-container {
+    flex: 1;
+    position: relative;
+    cursor: crosshair;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  #sidebar {
+    width: 280px;
+    background: #0d0d22;
+    border-left: 1px solid #1a1a3a;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #tools-panel {
+    padding: 12px;
+    border-bottom: 1px solid #1a1a3a;
+  }
+
+  .panel-title {
+    font-size: 11px;
+    color: #555;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .tool-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    margin-bottom: 5px;
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 4px;
+    color: #ccc;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s;
+    position: relative;
+  }
+
+  .tool-btn:hover:not(:disabled) {
+    background: #1a1a2e;
+    border-color: #333;
+  }
+
+  .tool-btn.active {
+    border-color: #4af;
+    background: #0a1525;
+    color: #fff;
+  }
+
+  .tool-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  .tool-btn .icon { font-size: 16px; width: 20px; text-align: center; }
+  .tool-btn .name { flex: 1; font-weight: bold; }
+  .tool-btn .cost { font-size: 11px; color: #f90; margin-left: auto; }
+  .tool-btn .locked { font-size: 10px; color: #555; position: absolute; right: 8px; }
+
+  .tool-btn .req {
+    font-size: 10px;
+    color: #555;
+    display: block;
+    margin-top: 2px;
+  }
+
+  #stats-panel {
+    padding: 12px;
+    border-bottom: 1px solid #1a1a3a;
+    flex-shrink: 0;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    padding: 3px 0;
+    border-bottom: 1px solid #111;
+  }
+
+  .stat-label { color: #777; }
+  .stat-value { color: #eee; font-weight: bold; }
+  .stat-value.good { color: #4f4; }
+  .stat-value.warn { color: #fa4; }
+  .stat-value.bad { color: #f44; }
+
+  #log-panel {
+    flex: 1;
+    padding: 12px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column-reverse;
+  }
+
+  .log-entry {
+    font-size: 11px;
+    padding: 3px 0;
+    border-bottom: 1px solid #111;
+    color: #888;
+    line-height: 1.5;
+  }
+
+  .log-entry.event { color: #4af; }
+  .log-entry.warn { color: #fa4; }
+  .log-entry.good { color: #4f4; }
+  .log-entry.bad { color: #f44; }
+
+  #overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+
+  #overlay-box {
+    background: #0d0d22;
+    border: 1px solid #2a2a5a;
+    border-radius: 8px;
+    padding: 40px;
+    max-width: 500px;
+    text-align: center;
+  }
+
+  #overlay-box h1 {
+    font-size: 32px;
+    color: #4af;
+    letter-spacing: 4px;
+    margin-bottom: 8px;
+  }
+
+  #overlay-box .subtitle {
+    color: #777;
+    font-size: 13px;
+    margin-bottom: 24px;
+    line-height: 1.8;
+  }
+
+  #overlay-box .big-result {
+    font-size: 22px;
+    margin-bottom: 16px;
+    font-weight: bold;
+  }
+
+  .btn-primary {
+    padding: 10px 30px;
+    background: #1a3a6a;
+    border: 1px solid #4af;
+    border-radius: 4px;
+    color: #4af;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    cursor: pointer;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    transition: all 0.15s;
+  }
+
+  .btn-primary:hover {
+    background: #2a4a8a;
+    color: #fff;
+  }
+
+  #tooltip {
+    position: fixed;
+    background: #0d0d22;
+    border: 1px solid #2a2a5a;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 11px;
+    color: #ccc;
+    pointer-events: none;
+    z-index: 100;
+    max-width: 220px;
+    line-height: 1.6;
+    display: none;
+  }
+
+  .brush-size-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 6px 10px;
+    background: #111;
+    border-radius: 4px;
+  }
+  .brush-size-row label { font-size: 11px; color: #666; flex: 1; }
+  .brush-size-row input[type=range] { flex: 2; accent-color: #4af; }
+  .brush-size-row span { font-size: 11px; color: #aaa; width: 20px; text-align: right; }
+
+  #win-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  #win-bar-label { font-size: 11px; color: #666; }
+  #win-progress-bar {
+    flex: 1;
+    height: 6px;
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  #win-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #0a8, #4f4);
+    border-radius: 3px;
+    transition: width 0.5s;
+  }
+  #win-pct { font-size: 11px; color: #4f4; min-width: 36px; text-align: right; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div id="title">Terraform</div>
+  <div id="win-bar">
+    <span id="win-bar-label">ECOSYSTEM</span>
+    <div id="win-progress-bar"><div id="win-progress-fill" style="width:0%"></div></div>
+    <span id="win-pct">0%</span>
+  </div>
+  <div id="energy-bar-container">
+    <span id="energy-label">ENERGY</span>
+    <div id="energy-bar"><div id="energy-fill" style="width:100%"></div></div>
+    <span id="energy-text">1000 / 1000</span>
+  </div>
+  <div id="age-display">Year <span id="year-num">0</span></div>
+</div>
+
+<div id="main">
+  <div id="canvas-container">
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <div id="sidebar">
+    <div id="tools-panel">
+      <div class="panel-title">Terraform Tools</div>
+
+      <button class="tool-btn active" data-tool="water" data-cost="2">
+        <span class="icon">💧</span>
+        <span class="name">Water</span>
+        <span class="cost">2/cell</span>
+      </button>
+
+      <button class="tool-btn" data-tool="soil" data-cost="3" disabled>
+        <span class="icon">🟫</span>
+        <span class="name">Soil</span>
+        <span class="cost">3/cell</span>
+        <span class="req">Requires: Water 15%</span>
+      </button>
+
+      <button class="tool-btn" data-tool="microbes" data-cost="5" disabled>
+        <span class="icon">🦠</span>
+        <span class="name">Microbes</span>
+        <span class="cost">5/cell</span>
+        <span class="req">Requires: Soil 10%</span>
+      </button>
+
+      <button class="tool-btn" data-tool="plants" data-cost="8" disabled>
+        <span class="icon">🌿</span>
+        <span class="name">Plants</span>
+        <span class="cost">8/cell</span>
+        <span class="req">Requires: Microbes 8%</span>
+      </button>
+
+      <button class="tool-btn" data-tool="herbivores" data-cost="15" disabled>
+        <span class="icon">🐇</span>
+        <span class="name">Herbivores</span>
+        <span class="cost">15/cell</span>
+        <span class="req">Requires: Plants 12%</span>
+      </button>
+
+      <button class="tool-btn" data-tool="predators" data-cost="25" disabled>
+        <span class="icon">🐺</span>
+        <span class="name">Predators</span>
+        <span class="cost">25/cell</span>
+        <span class="req">Requires: Herbivores 8%</span>
+      </button>
+
+      <div class="brush-size-row">
+        <label>Brush</label>
+        <input type="range" id="brush-size" min="1" max="8" value="3">
+        <span id="brush-label">3</span>
+      </div>
+    </div>
+
+    <div id="stats-panel">
+      <div class="panel-title">Biosphere</div>
+      <div class="stat-row"><span class="stat-label">💧 Water</span><span class="stat-value" id="stat-water">0%</span></div>
+      <div class="stat-row"><span class="stat-label">🟫 Soil</span><span class="stat-value" id="stat-soil">0%</span></div>
+      <div class="stat-row"><span class="stat-label">🦠 Microbes</span><span class="stat-value" id="stat-microbes">0%</span></div>
+      <div class="stat-row"><span class="stat-label">🌿 Plants</span><span class="stat-value" id="stat-plants">0%</span></div>
+      <div class="stat-row"><span class="stat-label">🐇 Herbivores</span><span class="stat-value" id="stat-herbs">0%</span></div>
+      <div class="stat-row"><span class="stat-label">🐺 Predators</span><span class="stat-value" id="stat-preds">0%</span></div>
+      <div class="stat-row"><span class="stat-label">⚡ Regen/yr</span><span class="stat-value good" id="stat-regen">+0</span></div>
+      <div class="stat-row"><span class="stat-label">🌡️ Temp</span><span class="stat-value" id="stat-temp">-50°C</span></div>
+    </div>
+
+    <div id="log-panel"></div>
+  </div>
+</div>
+
+<div id="overlay">
+  <div id="overlay-box">
+    <h1>TERRAFORM</h1>
+    <div class="subtitle">
+      A barren planet awaits your touch.<br>
+      Introduce elements one by one.<br>
+      Build a self-sustaining ecosystem<br>
+      before your divine energy runs out.
+    </div>
+    <button class="btn-primary" id="start-btn">Begin</button>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const container = document.getElementById('canvas-container');
+
+// Grid dimensions
+const COLS = 80;
+const ROWS = 55;
+let cellW, cellH;
+
+// Cell types (bitmask layers per cell)
+const LAYER_ROCK    = 0;
+const LAYER_WATER   = 1;
+const LAYER_SOIL    = 2;
+const LAYER_MICROBES= 3;
+const LAYER_PLANTS  = 4;
+const LAYER_HERBS   = 5;
+const LAYER_PREDS   = 6;
+
+// Game state
+let grid; // grid[y][x] = object with layer values 0..1
+let energy = 1000;
+let maxEnergy = 1000;
+let year = 0;
+let gameOver = false;
+let won = false;
+let selectedTool = 'water';
+let brushSize = 3;
+let mouseDown = false;
+let mouseX = -1, mouseY = -1;
+let gridX = -1, gridY = -1;
+let simTimer = null;
+let energyRegenRate = 0;
+
+const TOOLS = {
+  water:     { cost: 2,  layer: LAYER_WATER,    color: '#1a6faa' },
+  soil:      { cost: 3,  layer: LAYER_SOIL,     color: '#5a3a1a' },
+  microbes:  { cost: 5,  layer: LAYER_MICROBES, color: '#3a6a3a' },
+  plants:    { cost: 8,  layer: LAYER_PLANTS,   color: '#1a7a1a' },
+  herbivores:{ cost: 15, layer: LAYER_HERBS,    color: '#c8a020' },
+  predators: { cost: 25, layer: LAYER_PREDS,    color: '#aa2020' },
+};
+
+const UNLOCK_REQS = {
+  soil:       { layer: LAYER_WATER,    pct: 0.15 },
+  microbes:   { layer: LAYER_SOIL,     pct: 0.10 },
+  plants:     { layer: LAYER_MICROBES, pct: 0.08 },
+  herbivores: { layer: LAYER_PLANTS,   pct: 0.12 },
+  predators:  { layer: LAYER_HERBS,    pct: 0.08 },
+};
+
+function initGrid() {
+  grid = [];
+  for (let y = 0; y < ROWS; y++) {
+    grid[y] = [];
+    for (let x = 0; x < COLS; x++) {
+      // Rocky terrain with elevation noise
+      const nx = x / COLS, ny = y / ROWS;
+      const n = noise2(nx * 4, ny * 4);
+      grid[y][x] = {
+        rock: 0.4 + n * 0.4,
+        water: 0,
+        soil: 0,
+        microbes: 0,
+        plants: 0,
+        herbs: 0,
+        preds: 0,
+        elev: n,  // -1..1
+      };
+    }
+  }
+}
+
+// Simple noise
+function noise2(x, y) {
+  const X = Math.floor(x), Y = Math.floor(y);
+  const fx = x - X, fy = y - Y;
+  const u = fade(fx), v = fade(fy);
+  const a = hash(X, Y), b = hash(X+1, Y), c = hash(X, Y+1), d = hash(X+1, Y+1);
+  return lerp(v, lerp(u, a, b), lerp(u, c, d));
+}
+function fade(t) { return t*t*t*(t*(t*6-15)+10); }
+function lerp(t, a, b) { return a + t*(b-a); }
+function hash(x, y) {
+  let n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+  return (n - Math.floor(n)) * 2 - 1;
+}
+
+function resize() {
+  canvas.width = container.clientWidth;
+  canvas.height = container.clientHeight;
+  cellW = canvas.width / COLS;
+  cellH = canvas.height / ROWS;
+}
+
+// Colors for each layer blended
+function cellColor(cell) {
+  // Base rock color
+  let r = 60 + cell.rock * 40;
+  let g = 50 + cell.rock * 30;
+  let b = 45 + cell.rock * 25;
+
+  // Water tint
+  if (cell.water > 0) {
+    const w = cell.water;
+    r = lerp01(r, 20, w);
+    g = lerp01(g, 80, w);
+    b = lerp01(b, 180, w);
+  }
+
+  // Soil tint
+  if (cell.soil > 0) {
+    const s = cell.soil;
+    r = lerp01(r, 110, s * 0.6);
+    g = lerp01(g, 70, s * 0.6);
+    b = lerp01(b, 40, s * 0.6);
+  }
+
+  // Microbes (slight green tint)
+  if (cell.microbes > 0) {
+    const m = cell.microbes;
+    g = lerp01(g, g + 40, m * 0.5);
+  }
+
+  // Plants (green)
+  if (cell.plants > 0) {
+    const p = cell.plants;
+    r = lerp01(r, 30, p);
+    g = lerp01(g, 140, p);
+    b = lerp01(b, 30, p);
+  }
+
+  // Herbivores (yellow-tan dots handled separately)
+  // Predators (red dots handled separately)
+
+  return `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`;
+}
+
+function lerp01(a, b, t) { return a + Math.max(0, Math.min(1, t)) * (b - a); }
+
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const cell = grid[y][x];
+      const px = x * cellW, py = y * cellH;
+
+      ctx.fillStyle = cellColor(cell);
+      ctx.fillRect(px, py, cellW + 0.5, cellH + 0.5);
+
+      // Draw animal dots
+      if (cell.herbs > 0.1) {
+        const count = Math.ceil(cell.herbs * 3);
+        for (let i = 0; i < count; i++) {
+          const dx = (i * 7 + x * 3) % (cellW - 2) + 1;
+          const dy = (i * 5 + y * 3) % (cellH - 2) + 1;
+          ctx.fillStyle = '#e8c840';
+          ctx.fillRect(px + dx, py + dy, 2, 2);
+        }
+      }
+
+      if (cell.preds > 0.1) {
+        const count = Math.ceil(cell.preds * 2);
+        for (let i = 0; i < count; i++) {
+          const dx = (i * 9 + x * 5) % (cellW - 2) + 1;
+          const dy = (i * 7 + y * 5) % (cellH - 2) + 1;
+          ctx.fillStyle = '#e04040';
+          ctx.fillRect(px + dx, py + dy, 2, 2);
+        }
+      }
+    }
+  }
+
+  // Draw brush preview
+  if (gridX >= 0 && gridY >= 0 && !gameOver) {
+    const r = brushSize;
+    ctx.strokeStyle = 'rgba(100,180,255,0.6)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(
+      (gridX - r + 0.5) * cellW,
+      (gridY - r + 0.5) * cellH,
+      (r * 2) * cellW,
+      (r * 2) * cellH
+    );
+  }
+}
+
+function getLayerName(layer) {
+  return ['rock','water','soil','microbes','plants','herbs','preds'][layer];
+}
+
+function countPct(layer) {
+  const name = getLayerName(layer);
+  let total = 0;
+  for (let y = 0; y < ROWS; y++)
+    for (let x = 0; x < COLS; x++)
+      total += grid[y][x][name] > 0.3 ? 1 : 0;
+  return total / (ROWS * COLS);
+}
+
+function updateUI() {
+  // Energy
+  const epct = Math.max(0, energy / maxEnergy * 100);
+  document.getElementById('energy-fill').style.width = epct + '%';
+  document.getElementById('energy-fill').style.background =
+    epct > 50 ? 'linear-gradient(90deg,#f90,#ff0)' :
+    epct > 20 ? 'linear-gradient(90deg,#c50,#f90)' :
+    'linear-gradient(90deg,#900,#f00)';
+  document.getElementById('energy-text').textContent =
+    Math.round(energy) + ' / ' + maxEnergy;
+
+  document.getElementById('year-num').textContent = year;
+
+  // Stats
+  const waterPct  = countPct(LAYER_WATER);
+  const soilPct   = countPct(LAYER_SOIL);
+  const micPct    = countPct(LAYER_MICROBES);
+  const plantPct  = countPct(LAYER_PLANTS);
+  const herbPct   = countPct(LAYER_HERBS);
+  const predPct   = countPct(LAYER_PREDS);
+
+  function pctStr(v) { return (v * 100).toFixed(1) + '%'; }
+  function colorClass(v, lo, hi) { return v >= hi ? 'good' : v >= lo ? 'warn' : ''; }
+
+  setStatVal('stat-water',   pctStr(waterPct),  colorClass(waterPct, 0.1, 0.3));
+  setStatVal('stat-soil',    pctStr(soilPct),   colorClass(soilPct, 0.08, 0.2));
+  setStatVal('stat-microbes',pctStr(micPct),    colorClass(micPct, 0.06, 0.15));
+  setStatVal('stat-plants',  pctStr(plantPct),  colorClass(plantPct, 0.1, 0.25));
+  setStatVal('stat-herbs',   pctStr(herbPct),   colorClass(herbPct, 0.05, 0.15));
+  setStatVal('stat-preds',   pctStr(predPct),   colorClass(predPct, 0.02, 0.08));
+
+  // Temperature: starts at -50C, warms with water/microbes/plants
+  const temp = Math.round(-50 + waterPct * 60 + micPct * 20 + plantPct * 30 + herbPct * 10);
+  const tempEl = document.getElementById('stat-temp');
+  tempEl.textContent = temp + '°C';
+  tempEl.className = 'stat-value ' + (temp >= 10 ? 'good' : temp >= -10 ? 'warn' : '');
+
+  // Regen
+  energyRegenRate = calcRegen(waterPct, soilPct, micPct, plantPct, herbPct, predPct);
+  const regenEl = document.getElementById('stat-regen');
+  regenEl.textContent = (energyRegenRate >= 0 ? '+' : '') + energyRegenRate.toFixed(1);
+  regenEl.className = 'stat-value ' + (energyRegenRate > 0 ? 'good' : energyRegenRate < 0 ? 'bad' : '');
+
+  // Unlock buttons
+  for (const [name, req] of Object.entries(UNLOCK_REQS)) {
+    const btn = document.querySelector(`[data-tool="${name}"]`);
+    if (!btn) continue;
+    const layerPct = countPct(req.layer);
+    const unlocked = layerPct >= req.pct;
+    btn.disabled = !unlocked;
+  }
+
+  // Win progress: need all 6 layers at decent coverage + ecosystem stable
+  const winScore = computeWinScore(waterPct, soilPct, micPct, plantPct, herbPct, predPct);
+  document.getElementById('win-progress-fill').style.width = (winScore * 100) + '%';
+  document.getElementById('win-pct').textContent = (winScore * 100).toFixed(0) + '%';
+}
+
+function setStatVal(id, text, cls) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = 'stat-value ' + (cls || '');
+}
+
+function calcRegen(w, s, m, p, h, pr) {
+  // Ecosystem generates energy back: plants/microbes are producers
+  // Balanced predator-prey adds more
+  let regen = 0;
+  regen += m * 15;
+  regen += p * 25;
+  // Balance bonus
+  if (h > 0.03 && p > 0.03) {
+    const balance = 1 - Math.abs(h - pr * 3) / (h + pr * 3 + 0.01);
+    regen += balance * 20;
+  }
+  // Water sustains (small)
+  regen += w * 5;
+  // Drain: animals cost upkeep
+  regen -= h * 10;
+  regen -= pr * 15;
+  return regen;
+}
+
+function computeWinScore(w, s, m, p, h, pr) {
+  const targets = [
+    Math.min(w / 0.25, 1),
+    Math.min(s / 0.15, 1),
+    Math.min(m / 0.12, 1),
+    Math.min(p / 0.18, 1),
+    Math.min(h / 0.10, 1),
+    Math.min(pr / 0.05, 1),
+  ];
+  // All must be present for true win
+  const allPresent = targets.every(t => t > 0);
+  const avg = targets.reduce((a,b)=>a+b,0) / targets.length;
+  return allPresent ? avg : avg * 0.7;
+}
+
+// Paint tool on grid
+function paintCell(gx, gy) {
+  const tool = TOOLS[selectedTool];
+  if (!tool) return;
+
+  const r = brushSize - 1;
+  let painted = 0;
+
+  for (let dy = -r; dy <= r; dy++) {
+    for (let dx = -r; dx <= r; dx++) {
+      const nx = gx + dx, ny = gy + dy;
+      if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) continue;
+      // Circular brush
+      if (dx*dx + dy*dy > r*r + r) continue;
+
+      const cost = tool.cost;
+      if (energy < cost) { logMsg('Out of energy!', 'bad'); return; }
+
+      const cell = grid[ny][nx];
+      const field = getLayerName(tool.layer);
+
+      // Can't place soil on deep water
+      if (selectedTool === 'soil' && cell.water > 0.7) continue;
+      // Can't place plants without soil
+      if (selectedTool === 'plants' && cell.soil < 0.3) continue;
+      // Animals need plants nearby
+      if ((selectedTool === 'herbivores' || selectedTool === 'predators') && cell.plants < 0.2) continue;
+
+      if (cell[field] < 0.95) {
+        cell[field] = Math.min(1, cell[field] + 0.4);
+        energy -= cost;
+        painted++;
+      }
+    }
+  }
+}
+
+// Simulation tick — runs every ~1.5 seconds (= 1 year)
+function simTick() {
+  if (gameOver) return;
+
+  year++;
+
+  const w = countPct(LAYER_WATER);
+  const s = countPct(LAYER_SOIL);
+  const m = countPct(LAYER_MICROBES);
+  const p = countPct(LAYER_PLANTS);
+  const h = countPct(LAYER_HERBS);
+  const pr = countPct(LAYER_PREDS);
+
+  // Energy regen
+  const regen = calcRegen(w, s, m, p, h, pr);
+  energy = Math.min(maxEnergy, energy + regen);
+
+  // Cascade spread / decay
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const cell = grid[y][x];
+      const neighbors = getNeighbors(x, y);
+
+      // Water evaporation
+      if (cell.water > 0) cell.water -= 0.005;
+
+      // Soil erosion without water
+      if (cell.soil > 0) {
+        if (cell.water < 0.1) cell.soil -= 0.01;
+        else cell.soil += 0.003; // water keeps soil moist
+      }
+
+      // Microbes spread to adjacent soil
+      if (cell.microbes > 0) {
+        if (cell.soil < 0.2 || cell.water < 0.1) {
+          cell.microbes -= 0.02; // need soil + water
+        } else {
+          cell.microbes += 0.005;
+          // Spread
+          for (const n of neighbors) {
+            if (n.soil > 0.3 && n.water > 0.1 && n.microbes < 0.8) {
+              n.microbes += 0.008;
+            }
+          }
+        }
+      }
+
+      // Plants spread with microbes + water
+      if (cell.plants > 0) {
+        if (cell.microbes < 0.1 || cell.water < 0.1 || cell.soil < 0.2) {
+          cell.plants -= 0.015;
+        } else {
+          cell.plants += 0.004;
+          for (const n of neighbors) {
+            if (n.microbes > 0.2 && n.water > 0.1 && n.soil > 0.2 && n.plants < 0.8) {
+              n.plants += 0.006;
+            }
+          }
+        }
+      }
+
+      // Herbivores: need plants, eaten by predators
+      if (cell.herbs > 0) {
+        const predPressure = cell.preds * 0.3;
+        const foodAvail = cell.plants - 0.1;
+        if (foodAvail > 0 && cell.water > 0.05) {
+          cell.herbs = Math.min(1, cell.herbs + 0.003 - predPressure);
+          cell.plants = Math.max(0, cell.plants - cell.herbs * 0.01);
+          // Spread
+          for (const n of neighbors) {
+            if (n.plants > 0.3 && n.herbs < 0.6) n.herbs += 0.004;
+          }
+        } else {
+          cell.herbs -= 0.02 + predPressure;
+        }
+      }
+
+      // Predators: need herbivores
+      if (cell.preds > 0) {
+        if (cell.herbs > 0.1) {
+          cell.preds = Math.min(1, cell.preds + 0.002);
+          for (const n of neighbors) {
+            if (n.herbs > 0.2 && n.preds < 0.5) n.preds += 0.003;
+          }
+        } else {
+          cell.preds -= 0.03; // starve
+        }
+      }
+
+      // Clamp all
+      const fields = ['water','soil','microbes','plants','herbs','preds'];
+      for (const f of fields) cell[f] = Math.max(0, Math.min(1, cell[f]));
+    }
+  }
+
+  // Random cascade events
+  if (Math.random() < 0.05) randomEvent(w, s, m, p, h, pr);
+
+  // Energy drain over time
+  energy -= 3;
+
+  // Check win/lose
+  const winScore = computeWinScore(w, s, m, p, h, pr);
+  if (winScore >= 1.0 && regen > 0) {
+    endGame(true);
+    return;
+  }
+  if (energy <= 0) {
+    endGame(false);
+    return;
+  }
+
+  updateUI();
+  render();
+}
+
+function getNeighbors(x, y) {
+  const result = [];
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = x + dx, ny = y + dy;
+      if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS)
+        result.push(grid[ny][nx]);
+    }
+  }
+  return result;
+}
+
+function randomEvent(w, s, m, p, h, pr) {
+  const events = [];
+
+  if (w > 0.1) events.push(() => {
+    logMsg('Solar flare evaporates some water', 'warn');
+    applyGlobalMod('water', -0.1);
+  });
+
+  if (s > 0.1 && w < 0.1) events.push(() => {
+    logMsg('Dust storm erodes soil deposits', 'warn');
+    applyGlobalMod('soil', -0.08);
+  });
+
+  if (m > 0.05 && p > 0.05) events.push(() => {
+    logMsg('Microbial bloom accelerates plant growth!', 'good');
+    applyGlobalMod('plants', 0.05);
+  });
+
+  if (h > 0.05 && pr < 0.02) events.push(() => {
+    logMsg('Herbivore population booms, overgrazing begins', 'warn');
+    applyGlobalMod('plants', -0.07);
+    applyGlobalMod('herbs', 0.08);
+  });
+
+  if (pr > 0.03 && h > 0.05) events.push(() => {
+    logMsg('Predator-prey cycle stabilizes — energy surge!', 'good');
+    energy = Math.min(maxEnergy, energy + 50);
+  });
+
+  if (p > 0.15) events.push(() => {
+    logMsg('Lush vegetation releases oxygen — warming planet', 'event');
+    // small bonus
+    applyGlobalMod('microbes', 0.03);
+  });
+
+  if (events.length === 0) return;
+  events[Math.floor(Math.random() * events.length)]();
+}
+
+function applyGlobalMod(field, delta) {
+  for (let y = 0; y < ROWS; y++)
+    for (let x = 0; x < COLS; x++) {
+      grid[y][x][field] = Math.max(0, Math.min(1, grid[y][x][field] + delta * (0.5 + Math.random())));
+    }
+}
+
+function endGame(success) {
+  gameOver = true;
+  clearInterval(simTimer);
+  won = success;
+
+  const overlay = document.getElementById('overlay');
+  const box = document.getElementById('overlay-box');
+  overlay.style.display = 'flex';
+
+  if (success) {
+    box.innerHTML = `
+      <h1 style="color:#4f4">SUCCESS</h1>
+      <div class="big-result" style="color:#4f4">🌍 Ecosystem Established!</div>
+      <div class="subtitle">
+        A living world breathes where once there was only rock.<br>
+        You shaped life from nothing in ${year} years.
+      </div>
+      <button class="btn-primary" onclick="restartGame()">Play Again</button>
+    `;
+  } else {
+    box.innerHTML = `
+      <h1 style="color:#f44">FAILED</h1>
+      <div class="big-result" style="color:#f44">⚡ Energy Depleted</div>
+      <div class="subtitle">
+        The planet goes dark.<br>
+        Your energy faded before life could sustain itself.<br>
+        Year ${year} — the ecosystem was ${(computeWinScore(
+          countPct(LAYER_WATER), countPct(LAYER_SOIL), countPct(LAYER_MICROBES),
+          countPct(LAYER_PLANTS), countPct(LAYER_HERBS), countPct(LAYER_PREDS)
+        ) * 100).toFixed(0)}% complete.
+      </div>
+      <button class="btn-primary" onclick="restartGame()">Try Again</button>
+    `;
+  }
+}
+
+function logMsg(text, cls) {
+  const panel = document.getElementById('log-panel');
+  const el = document.createElement('div');
+  el.className = 'log-entry ' + (cls || '');
+  el.textContent = `[Yr ${year}] ${text}`;
+  panel.insertBefore(el, panel.firstChild);
+  // Trim log
+  while (panel.children.length > 60) panel.removeChild(panel.lastChild);
+}
+
+function startGame() {
+  gameOver = false;
+  won = false;
+  energy = 1000;
+  year = 0;
+  selectedTool = 'water';
+
+  document.querySelectorAll('.tool-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tool === 'water');
+  });
+
+  document.getElementById('log-panel').innerHTML = '';
+  document.getElementById('overlay').style.display = 'none';
+
+  initGrid();
+  resize();
+  updateUI();
+  render();
+
+  logMsg('Planet detected. Begin terraforming.', 'event');
+
+  if (simTimer) clearInterval(simTimer);
+  simTimer = setInterval(simTick, 1500);
+}
+
+function restartGame() {
+  startGame();
+}
+
+// Input handling
+canvas.addEventListener('mousedown', e => {
+  if (gameOver) return;
+  mouseDown = true;
+  updateGridPos(e);
+  paintCell(gridX, gridY);
+  render();
+});
+
+canvas.addEventListener('mousemove', e => {
+  updateGridPos(e);
+  if (mouseDown) {
+    paintCell(gridX, gridY);
+    render();
+  }
+  updateUI();
+  render();
+});
+
+canvas.addEventListener('mouseup', () => { mouseDown = false; });
+canvas.addEventListener('mouseleave', () => {
+  mouseDown = false;
+  gridX = -1; gridY = -1;
+  render();
+});
+
+function updateGridPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const sx = (e.clientX - rect.left) / rect.width;
+  const sy = (e.clientY - rect.top) / rect.height;
+  gridX = Math.floor(sx * COLS);
+  gridY = Math.floor(sy * ROWS);
+}
+
+document.querySelectorAll('.tool-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.disabled) return;
+    selectedTool = btn.dataset.tool;
+    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+document.getElementById('brush-size').addEventListener('input', e => {
+  brushSize = parseInt(e.target.value);
+  document.getElementById('brush-label').textContent = brushSize;
+});
+
+document.getElementById('start-btn').addEventListener('click', startGame);
+
+window.addEventListener('resize', () => { resize(); render(); });
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  const keys = {'1':'water','2':'soil','3':'microbes','4':'plants','5':'herbivores','6':'predators'};
+  if (keys[e.key]) {
+    const btn = document.querySelector(`[data-tool="${keys[e.key]}"]`);
+    if (btn && !btn.disabled) btn.click();
+  }
+});
+
+// Initial state
+resize();
+</script>
+</body>
+</html>
