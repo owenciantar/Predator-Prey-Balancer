@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Predator-Prey Balancer</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #0a160a;
+  color: #90b890;
+  font-family: 'Courier New', monospace;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  padding: 14px 16px;
+  user-select: none;
+}
+
+h1 {
+  color: #55cc55;
+  font-size: 1.2rem;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  text-shadow: 0 0 12px #33aa3388;
+}
+
+#game-wrap {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+#canvas-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+canvas {
+  display: block;
+  border: 1px solid #1e3a1e;
+  cursor: crosshair;
+  image-rendering: pixelated;
+}
+
+/* ---- Overlay ---- */
+#overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 12, 5, 0.88);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+#overlay h2 {
+  font-size: 1.8rem;
+  letter-spacing: 6px;
+  color: #55cc55;
+  text-shadow: 0 0 20px #33aa3388;
+}
+
+#overlay-msg {
+  color: #80a880;
+  font-size: 0.82rem;
+  text-align: center;
+  line-height: 1.7;
+  max-width: 340px;
+}
+
+#overlay-btn {
+  margin-top: 6px;
+  background: transparent;
+  color: #55cc55;
+  border: 1px solid #33aa33;
+  padding: 8px 28px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.9rem;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  transition: background 0.15s;
+}
+#overlay-btn:hover { background: #1a3a1a; }
+
+/* ---- Sidebar ---- */
+#sidebar {
+  width: 190px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.panel {
+  background: #0d1f0d;
+  border: 1px solid #1a3a1a;
+  padding: 10px 12px;
+}
+
+.panel-title {
+  color: #55cc55;
+  font-size: 0.68rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #1a3a1a;
+  padding-bottom: 5px;
+}
+
+/* ---- Population bars ---- */
+.pop-row { margin-bottom: 9px; }
+.pop-row:last-child { margin-bottom: 0; }
+
+.pop-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.72rem;
+  margin-bottom: 4px;
+  color: #90b890;
+}
+
+.pop-label .icon { font-size: 0.85rem; }
+.pop-label .count { color: #aaccaa; font-weight: bold; min-width: 28px; text-align: right; }
+
+.pop-track {
+  height: 7px;
+  background: #0f1f0f;
+  border: 1px solid #1a3a1a;
+  position: relative;
+  overflow: visible;
+}
+
+.pop-bar {
+  height: 100%;
+  transition: width 0.25s ease, background-color 0.4s ease;
+  min-width: 2px;
+}
+
+.pop-min-marker {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 1px;
+  background: #ff444466;
+}
+
+/* ---- Tool buttons ---- */
+.tool-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  background: transparent;
+  border: 1px solid #1a3a1a;
+  color: #80a880;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.75rem;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 5px;
+  transition: border-color 0.1s, background 0.1s, color 0.1s;
+}
+.tool-btn:last-child { margin-bottom: 0; }
+
+.tool-btn:hover:not(.active) {
+  background: #111f11;
+  border-color: #2a5a2a;
+  color: #aaccaa;
+}
+
+.tool-btn.active {
+  border-color: #55cc55;
+  background: #112211;
+  color: #88ee88;
+}
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 1px;
+}
+
+.tool-cost { margin-left: auto; color: #55aa55; font-size: 0.68rem; }
+
+/* ---- Spirit energy ---- */
+.energy-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 6px;
+}
+
+.orb {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #1a2a1a;
+  border: 1px solid #2a4a2a;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+
+.orb.lit {
+  background: #44cc44;
+  border-color: #55dd55;
+  box-shadow: 0 0 5px #33bb3388;
+}
+
+.energy-sub { font-size: 0.65rem; color: #50705050; }
+
+/* ---- Timer / status ---- */
+#timer {
+  font-size: 1.5rem;
+  color: #55cc55;
+  text-align: center;
+  letter-spacing: 2px;
+  text-shadow: 0 0 10px #33aa3344;
+}
+
+#win-bar-bg {
+  height: 4px;
+  background: #0f1f0f;
+  border: 1px solid #1a3a1a;
+  margin-top: 6px;
+  overflow: hidden;
+}
+#win-bar { height: 100%; width: 0%; background: #55cc55; transition: width 0.5s linear; }
+
+#status-text {
+  font-size: 0.7rem;
+  color: #80a880;
+  text-align: center;
+  min-height: 36px;
+  line-height: 1.6;
+  margin-top: 6px;
+}
+
+.warn  { color: #ffaa00; }
+.alert { color: #ff5555; }
+
+/* ---- Help text ---- */
+#help {
+  font-size: 0.65rem;
+  color: #3a5a3a;
+  line-height: 1.65;
+}
+#help b { color: #608060; }
+</style>
+</head>
+<body>
+
+<h1>&#x1F33F; Predator-Prey Balancer</h1>
+
+<div id="game-wrap">
+  <div id="canvas-wrap">
+    <canvas id="grid"></canvas>
+    <div id="overlay">
+      <h2 id="ov-title">NATURE SPIRIT</h2>
+      <p id="overlay-msg">
+        You are the spirit of the wild.<br>
+        Balance the food chain: <b>plants</b> feed <b>rabbits</b>, rabbits feed <b>wolves</b>.<br><br>
+        Keep all three species alive for <b>3 minutes</b>.<br>
+        If any species goes extinct or overruns the land — you fail.
+      </p>
+      <button id="overlay-btn">BEGIN</button>
+    </div>
+  </div>
+
+  <div id="sidebar">
+
+    <!-- Populations -->
+    <div class="panel">
+      <div class="panel-title">Populations</div>
+
+      <div class="pop-row">
+        <div class="pop-label">
+          <span><span class="icon">&#x1F331;</span> Plants</span>
+          <span class="count" id="cnt-plant">0</span>
+        </div>
+        <div class="pop-track" id="track-plant">
+          <div class="pop-bar" id="bar-plant"></div>
+          <div class="pop-min-marker" id="min-plant"></div>
+        </div>
+      </div>
+
+      <div class="pop-row">
+        <div class="pop-label">
+          <span><span class="icon">&#x1F407;</span> Rabbits</span>
+          <span class="count" id="cnt-rabbit">0</span>
+        </div>
+        <div class="pop-track" id="track-rabbit">
+          <div class="pop-bar" id="bar-rabbit"></div>
+          <div class="pop-min-marker" id="min-rabbit"></div>
+        </div>
+      </div>
+
+      <div class="pop-row">
+        <div class="pop-label">
+          <span><span class="icon">&#x1F43A;</span> Wolves</span>
+          <span class="count" id="cnt-wolf">0</span>
+        </div>
+        <div class="pop-track" id="track-wolf">
+          <div class="pop-bar" id="bar-wolf"></div>
+          <div class="pop-min-marker" id="min-wolf"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tools -->
+    <div class="panel">
+      <div class="panel-title">Summon</div>
+      <button class="tool-btn active" id="btn-plant" onclick="setTool('plant')">
+        <div class="swatch" style="background:#3a9a3a"></div>
+        [1] Plant
+        <span class="tool-cost">1&#x2736;</span>
+      </button>
+      <button class="tool-btn" id="btn-rabbit" onclick="setTool('rabbit')">
+        <div class="swatch" style="background:#c09040"></div>
+        [2] Rabbit
+        <span class="tool-cost">2&#x2736;</span>
+      </button>
+      <button class="tool-btn" id="btn-wolf" onclick="setTool('wolf')">
+        <div class="swatch" style="background:#6a6aaa"></div>
+        [3] Wolf
+        <span class="tool-cost">3&#x2736;</span>
+      </button>
+    </div>
+
+    <!-- Spirit energy -->
+    <div class="panel">
+      <div class="panel-title">Spirit Energy</div>
+      <div class="energy-row" id="energy-orbs"></div>
+      <div class="energy-sub">+1 every 4 seconds &bull; max 12</div>
+    </div>
+
+    <!-- Timer -->
+    <div class="panel">
+      <div id="timer">3:00</div>
+      <div id="win-bar-bg"><div id="win-bar"></div></div>
+      <div id="status-text"></div>
+    </div>
+
+    <!-- Help -->
+    <div class="panel" id="help">
+      <b>Drag</b> to paint plants<br>
+      <b>Click</b> to place animals<br>
+      <b>Keys:</b> 1 / 2 / 3 to switch tool<br><br>
+      <b>Lose if:</b> any species hits 0<br>or exceeds its max limit
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+//  CONSTANTS
+// ─────────────────────────────────────────────
+const COLS = 40, ROWS = 30, CELL = 20;
+const W = COLS * CELL, H = ROWS * CELL;          // 800 × 600
+const TICK_MS  = 200;                             // simulation speed (5 ticks/sec)
+const WIN_MS   = 180_000;                         // 3-minute survival goal
+const REGEN_MS = 4_000;                           // spirit energy recharge
+const MAX_ENERGY = 12;
+
+const T = { EMPTY: 0, PLANT: 1, RABBIT: 2, WOLF: 3 };
+
+// Lose thresholds
+const MIN = { [T.PLANT]: 6, [T.RABBIT]: 3, [T.WOLF]: 2 };
+const MAX = { [T.PLANT]: 480, [T.RABBIT]: 230, [T.WOLF]: 85 };
+
+// Entity parameters
+const R_INIT = 26, R_MAX = 42, R_GAIN = 11, R_REPR = 35, R_REPR_P = 0.30, R_MAXAGE = 480;
+const W_INIT = 32, W_MAX = 62, W_GAIN = 22, W_REPR = 52, W_REPR_P = 0.22, W_MAXAGE = 700;
+const PLANT_SPREAD = 0.05;
+
+const COST = { plant: 1, rabbit: 2, wolf: 3 };
+
+// ─────────────────────────────────────────────
+//  CANVAS SETUP
+// ─────────────────────────────────────────────
+const canvas = document.getElementById('grid');
+const ctx    = canvas.getContext('2d');
+canvas.width  = W;
+canvas.height = H;
+
+// Off-screen buffer for performance
+const buf    = document.createElement('canvas');
+buf.width = W; buf.height = H;
+const bctx   = buf.getContext('2d');
+
+// ─────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────
+let grid  = [];           // grid[r][c] = null | {type, energy, age}
+let pops  = {};           // population counts
+let spirit    = MAX_ENERGY;
+let selTool   = 'plant';
+let gameState = 'idle';   // idle | playing | won | lost
+let t0 = 0, lastTick = 0, lastRegen = 0;
+let hoverCell = null;     // {r,c} for cursor highlight
+
+// ─────────────────────────────────────────────
+//  FACTORIES
+// ─────────────────────────────────────────────
+const mkPlant  = () => ({ type: T.PLANT,  energy: 5,      age: 0 });
+const mkRabbit = () => ({ type: T.RABBIT, energy: R_INIT,  age: 0 });
+const mkWolf   = () => ({ type: T.WOLF,   energy: W_INIT,  age: 0 });
+
+// ─────────────────────────────────────────────
+//  GRID HELPERS
+// ─────────────────────────────────────────────
+function initGrid() {
+  grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+}
+
+function spawnInitial() {
+  const idxs = shuffle(Array.from({ length: ROWS * COLS }, (_, i) => i));
+  let i = 0;
+  for (let n = 0; n < 115; n++) place(idxs[i++], mkPlant());
+  for (let n = 0; n < 26;  n++) place(idxs[i++], mkRabbit());
+  for (let n = 0; n < 7;   n++) place(idxs[i++], mkWolf());
+}
+
+function place(idx, entity) {
+  grid[Math.floor(idx / COLS)][idx % COLS] = entity;
+}
+
+function adjCells(r, c) {
+  const a = [];
+  if (r > 0)        a.push([r-1, c]);
+  if (r < ROWS-1)   a.push([r+1, c]);
+  if (c > 0)        a.push([r, c-1]);
+  if (c < COLS-1)   a.push([r, c+1]);
+  return a;
+}
+
+function adjOfType(r, c, type) {
+  return adjCells(r, c).filter(([nr, nc]) => {
+    const cell = grid[nr][nc];
+    return type === T.EMPTY ? !cell : (cell && cell.type === type);
+  });
+}
+
+function countPops() {
+  pops = { [T.PLANT]: 0, [T.RABBIT]: 0, [T.WOLF]: 0 };
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (grid[r][c]) pops[grid[r][c].type]++;
+}
+
+// ─────────────────────────────────────────────
+//  SIMULATION STEP
+// ─────────────────────────────────────────────
+function step() {
+  const plants = [], rabbits = [], wolves = [];
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const e = grid[r][c];
+      if (!e) continue;
+      if (e.type === T.PLANT)  plants.push([r, c, e]);
+      if (e.type === T.RABBIT) rabbits.push([r, c, e]);
+      if (e.type === T.WOLF)   wolves.push([r, c, e]);
+    }
+  }
+
+  shuffle(wolves);
+  shuffle(rabbits);
+  shuffle(plants);
+
+  // --- Wolves ---
+  for (const [r, c, wolf] of wolves) {
+    if (grid[r][c] !== wolf) continue;
+
+    wolf.energy--;
+    wolf.age++;
+
+    if (wolf.energy <= 0 || wolf.age > W_MAXAGE) { grid[r][c] = null; continue; }
+
+    const prey = adjOfType(r, c, T.RABBIT);
+    if (prey.length > 0) {
+      const [nr, nc] = rnd(prey);
+      if (grid[nr][nc] && grid[nr][nc].type === T.RABBIT) {
+        wolf.energy = Math.min(wolf.energy + W_GAIN, W_MAX);
+        const spawn = wolf.energy >= W_REPR && Math.random() < W_REPR_P;
+        grid[r][c] = spawn ? mkWolf() : null;
+        grid[nr][nc] = wolf;
+      }
+    } else {
+      const empty = adjOfType(r, c, T.EMPTY);
+      if (empty.length > 0) {
+        const [nr, nc] = rnd(empty);
+        if (!grid[nr][nc]) { grid[nr][nc] = wolf; grid[r][c] = null; }
+      }
+    }
+  }
+
+  // --- Rabbits ---
+  for (const [r, c, rabbit] of rabbits) {
+    if (grid[r][c] !== rabbit) continue;
+
+    rabbit.energy--;
+    rabbit.age++;
+
+    if (rabbit.energy <= 0 || rabbit.age > R_MAXAGE) { grid[r][c] = null; continue; }
+
+    const food = adjOfType(r, c, T.PLANT);
+    if (food.length > 0) {
+      const [nr, nc] = rnd(food);
+      if (grid[nr][nc] && grid[nr][nc].type === T.PLANT) {
+        rabbit.energy = Math.min(rabbit.energy + R_GAIN, R_MAX);
+        const spawn = rabbit.energy >= R_REPR && Math.random() < R_REPR_P;
+        grid[r][c] = spawn ? mkRabbit() : null;
+        grid[nr][nc] = rabbit;
+      }
+    } else {
+      const empty = adjOfType(r, c, T.EMPTY);
+      if (empty.length > 0) {
+        const [nr, nc] = rnd(empty);
+        if (!grid[nr][nc]) { grid[nr][nc] = rabbit; grid[r][c] = null; }
+      }
+    }
+  }
+
+  // --- Plants (spread) ---
+  for (const [r, c, plant] of plants) {
+    if (grid[r][c] !== plant) continue;
+    plant.age++;
+    if (Math.random() < PLANT_SPREAD) {
+      const empty = adjOfType(r, c, T.EMPTY);
+      if (empty.length > 0) {
+        const [nr, nc] = rnd(empty);
+        if (!grid[nr][nc]) grid[nr][nc] = mkPlant();
+      }
+    }
+  }
+
+  countPops();
+}
+
+// ─────────────────────────────────────────────
+//  RENDERING
+// ─────────────────────────────────────────────
+// Base colors: [bg, mid, highlight]
+const PALETTE = {
+  [T.PLANT]:  ['#194d19', '#2e8c2e', '#4dbb4d'],
+  [T.RABBIT]: ['#7a5010', '#b88030', '#dda050'],
+  [T.WOLF]:   ['#2a2a55', '#5050a0', '#8888cc'],
+};
+
+function render(now) {
+  bctx.fillStyle = '#0a160a';
+  bctx.fillRect(0, 0, W, H);
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const x = c * CELL, y = r * CELL;
+      const e = grid[r][c];
+
+      if (!e) {
+        bctx.fillStyle = '#0d1a0d';
+        bctx.fillRect(x, y, CELL - 1, CELL - 1);
+        continue;
+      }
+
+      const pal = PALETTE[e.type];
+      const maxE = e.type === T.WOLF ? W_MAX : e.type === T.RABBIT ? R_MAX : 10;
+      const vit  = Math.max(0, Math.min(1, e.energy / maxE));
+
+      bctx.fillStyle = pal[0];
+      bctx.fillRect(x, y, CELL - 1, CELL - 1);
+
+      // Inner square varies with vitality
+      bctx.fillStyle = vit > 0.55 ? pal[2] : pal[1];
+      const pad = 4;
+      bctx.fillRect(x + pad, y + pad, CELL - 1 - pad * 2, CELL - 1 - pad * 2);
+
+      // Dim overlay for low energy
+      if (vit < 0.25) {
+        bctx.fillStyle = 'rgba(0,0,0,0.45)';
+        bctx.fillRect(x, y, CELL - 1, CELL - 1);
+      }
+    }
+  }
+
+  // Cursor highlight
+  if (hoverCell && gameState === 'playing') {
+    const { r, c } = hoverCell;
+    bctx.strokeStyle = selTool === 'plant'  ? '#55cc55' :
+                       selTool === 'rabbit' ? '#ddaa44' : '#9999dd';
+    bctx.lineWidth = 1.5;
+    bctx.strokeRect(c * CELL + 0.75, r * CELL + 0.75, CELL - 2.5, CELL - 2.5);
+  }
+
+  ctx.drawImage(buf, 0, 0);
+}
+
+// ─────────────────────────────────────────────
+//  UI
+// ─────────────────────────────────────────────
+function updateUI(now) {
+  const pc = pops[T.PLANT]  || 0;
+  const rc = pops[T.RABBIT] || 0;
+  const wc = pops[T.WOLF]   || 0;
+
+  document.getElementById('cnt-plant').textContent  = pc;
+  document.getElementById('cnt-rabbit').textContent = rc;
+  document.getElementById('cnt-wolf').textContent   = wc;
+
+  setBar('plant',  pc, MAX[T.PLANT],  MIN[T.PLANT],  '#3ab03a', '#ffaa00', '#ff4444');
+  setBar('rabbit', rc, MAX[T.RABBIT], MIN[T.RABBIT], '#c09040', '#ffcc44', '#ff4444');
+  setBar('wolf',   wc, MAX[T.WOLF],   MIN[T.WOLF],   '#6868aa', '#aaaaee', '#ff4444');
+
+  // Energy orbs
+  const orbEl = document.getElementById('energy-orbs');
+  orbEl.innerHTML = '';
+  for (let i = 0; i < MAX_ENERGY; i++) {
+    const d = document.createElement('div');
+    d.className = 'orb' + (i < spirit ? ' lit' : '');
+    orbEl.appendChild(d);
+  }
+
+  // Timer
+  if (gameState === 'playing') {
+    const elapsed  = now - t0;
+    const remain   = Math.max(0, WIN_MS - elapsed);
+    const m = Math.floor(remain / 60000);
+    const s = Math.floor((remain % 60000) / 1000);
+    document.getElementById('timer').textContent =
+      `${m}:${String(s).padStart(2, '0')}`;
+    document.getElementById('win-bar').style.width =
+      (elapsed / WIN_MS * 100).toFixed(1) + '%';
+  }
+
+  // Status warnings
+  const msgs = [];
+  if (pc <= MIN[T.PLANT]  * 4) msgs.push('<span class="warn">&#x26A0; Plants critically low</span>');
+  if (rc <= MIN[T.RABBIT] * 4) msgs.push('<span class="warn">&#x26A0; Rabbits critically low</span>');
+  if (wc <= MIN[T.WOLF]   * 3) msgs.push('<span class="warn">&#x26A0; Wolves critically low</span>');
+  if (pc >= MAX[T.PLANT]  * 0.82) msgs.push('<span class="alert">&#x26D4; Plants overgrowing!</span>');
+  if (rc >= MAX[T.RABBIT] * 0.82) msgs.push('<span class="alert">&#x26D4; Rabbits overrunning!</span>');
+  if (wc >= MAX[T.WOLF]   * 0.82) msgs.push('<span class="alert">&#x26D4; Wolves overrunning!</span>');
+  document.getElementById('status-text').innerHTML = msgs.join('<br>');
+}
+
+function setBar(name, count, max, min, ok, warn, danger) {
+  const bar   = document.getElementById('bar-' + name);
+  const track = document.getElementById('track-' + name);
+  const mark  = document.getElementById('min-'   + name);
+
+  const pct    = Math.min(100, count / max * 100);
+  const minPct = min / max * 100;
+  bar.style.width = pct + '%';
+  mark.style.left  = minPct + '%';
+
+  const lo = count <= min * 2.5;
+  const hi = count >= max * 0.82;
+  bar.style.background = (lo || hi) ? danger : (count <= min * 5 || count >= max * 0.65) ? warn : ok;
+}
+
+// ─────────────────────────────────────────────
+//  GAME LOOP
+// ─────────────────────────────────────────────
+function loop(now) {
+  requestAnimationFrame(loop);
+
+  if (gameState !== 'playing') { render(now); return; }
+
+  // Spirit energy regen
+  if (now - lastRegen >= REGEN_MS) {
+    spirit = Math.min(MAX_ENERGY, spirit + 1);
+    lastRegen = now;
+  }
+
+  // Simulation tick
+  if (now - lastTick >= TICK_MS) {
+    step();
+    lastTick = now;
+
+    const reason = loseReason();
+    if (reason) { endGame(false, reason); return; }
+    if (now - t0 >= WIN_MS) { endGame(true); return; }
+  }
+
+  render(now);
+  updateUI(now);
+}
+
+function loseReason() {
+  if (pops[T.PLANT]  === 0)              return 'All plants died out.';
+  if (pops[T.RABBIT] === 0)              return 'All rabbits died out.';
+  if (pops[T.WOLF]   === 0)              return 'All wolves died out.';
+  if (pops[T.PLANT]  > MAX[T.PLANT])     return 'Plants smothered the land.';
+  if (pops[T.RABBIT] > MAX[T.RABBIT])    return 'Rabbits overran the ecosystem.';
+  if (pops[T.WOLF]   > MAX[T.WOLF])      return 'Wolves hunted everything to ruin.';
+  return null;
+}
+
+// ─────────────────────────────────────────────
+//  START / END
+// ─────────────────────────────────────────────
+function startGame() {
+  initGrid();
+  spawnInitial();
+  countPops();
+  spirit    = MAX_ENERGY;
+  gameState = 'playing';
+  const now = performance.now();
+  t0        = now;
+  lastTick  = now;
+  lastRegen = now;
+  document.getElementById('overlay').style.display = 'none';
+}
+
+function endGame(won, reason) {
+  gameState = won ? 'won' : 'lost';
+  const ov    = document.getElementById('overlay');
+  const title = document.getElementById('ov-title');
+  const msg   = document.getElementById('overlay-msg');
+  const btn   = document.getElementById('overlay-btn');
+
+  ov.style.display = 'flex';
+  title.textContent = won ? 'BALANCE RESTORED' : 'BALANCE LOST';
+  title.style.color = won ? '#55cc55' : '#ff5555';
+
+  msg.innerHTML = won
+    ? 'You maintained all three species for 3 minutes.<br>The spirits of the wild are at peace.'
+    : `<b style="color:#ff7777">${reason}</b><br>The ecosystem collapsed.<br>Try again to restore balance.`;
+
+  btn.textContent = 'TRY AGAIN';
+}
+
+// ─────────────────────────────────────────────
+//  INPUT
+// ─────────────────────────────────────────────
+function canvasCoords(e) {
+  const rect   = canvas.getBoundingClientRect();
+  const scaleX = W / rect.width;
+  const scaleY = H / rect.height;
+  return {
+    c: Math.floor((e.clientX - rect.left) * scaleX / CELL),
+    r: Math.floor((e.clientY - rect.top)  * scaleY / CELL),
+  };
+}
+
+function summon(r, c) {
+  if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return;
+  const cost = COST[selTool];
+  if (spirit < cost) return;
+
+  const type = selTool === 'plant' ? T.PLANT : selTool === 'rabbit' ? T.RABBIT : T.WOLF;
+
+  // Only place plants on empty; animals on empty or plant cells
+  if (type === T.PLANT  && grid[r][c]) return;
+  if (type !== T.PLANT  && grid[r][c] && grid[r][c].type !== T.PLANT) return;
+
+  spirit -= cost;
+  grid[r][c] = type === T.PLANT ? mkPlant() : type === T.RABBIT ? mkRabbit() : mkWolf();
+  countPops();
+}
+
+let dragging = false;
+const paintedThisDrag = new Set();
+
+canvas.addEventListener('mousedown', e => {
+  if (gameState !== 'playing') return;
+  dragging = true;
+  paintedThisDrag.clear();
+  const { r, c } = canvasCoords(e);
+  paintedThisDrag.add(r * COLS + c);
+  summon(r, c);
+});
+
+canvas.addEventListener('mousemove', e => {
+  const { r, c } = canvasCoords(e);
+  hoverCell = (r >= 0 && r < ROWS && c >= 0 && c < COLS) ? { r, c } : null;
+
+  if (!dragging || gameState !== 'playing' || selTool !== 'plant') return;
+  const key = r * COLS + c;
+  if (paintedThisDrag.has(key)) return;
+  paintedThisDrag.add(key);
+  summon(r, c);
+});
+
+canvas.addEventListener('mouseup',    () => { dragging = false; paintedThisDrag.clear(); });
+canvas.addEventListener('mouseleave', () => { dragging = false; hoverCell = null; });
+
+document.addEventListener('keydown', e => {
+  if (e.key === '1') setTool('plant');
+  if (e.key === '2') setTool('rabbit');
+  if (e.key === '3') setTool('wolf');
+});
+
+function setTool(t) {
+  selTool = t;
+  ['plant', 'rabbit', 'wolf'].forEach(name =>
+    document.getElementById('btn-' + name).classList.toggle('active', name === t)
+  );
+}
+
+document.getElementById('overlay-btn').addEventListener('click', startGame);
+
+// ─────────────────────────────────────────────
+//  UTILS
+// ─────────────────────────────────────────────
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function rnd(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+// ─────────────────────────────────────────────
+//  BOOT
+// ─────────────────────────────────────────────
+initGrid();
+countPops();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
